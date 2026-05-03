@@ -43,7 +43,10 @@ app_license = "mit"
 # page_js = {"page" : "public/js/file.js"}
 
 # include js in doctype views
-# doctype_js = {"doctype" : "public/js/doctype.js"}
+doctype_js = {
+	"Project": "public/js/project_printechs_support.js",
+	"Support Ticket": "public/js/support_ticket.js",
+}
 # doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
 # doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
@@ -55,6 +58,12 @@ app_license = "mit"
 
 # Home Pages
 # ----------
+
+# React SPA: deep links like /support-portal/tickets/TICKET-NAME must serve the same shell as /support-portal
+# (same pattern as Frappe core: /app/<path:app_path> → app).
+website_route_rules = [
+	{"from_route": "/support-portal/<path:app_path>", "to_route": "support-portal"},
+]
 
 # application home page (will override Website Settings)
 # home_page = "login"
@@ -83,7 +92,10 @@ app_license = "mit"
 # ------------
 
 # before_install = "printechs_support.install.before_install"
-# after_install = "printechs_support.install.after_install"
+after_install = "printechs_support.install.after_install"
+
+# Sync workspace + settings after migrate (desk menu completeness across sites)
+after_migrate = ["printechs_support.install.after_migrate"]
 
 # Uninstallation
 # ------------
@@ -117,21 +129,23 @@ app_license = "mit"
 # -----------
 # Permissions evaluated in scripted ways
 
-# permission_query_conditions = {
-# 	"Event": "frappe.desk.doctype.event.event.get_permission_query_conditions",
-# }
-#
-# has_permission = {
-# 	"Event": "frappe.desk.doctype.event.event.has_permission",
-# }
+permission_query_conditions = {
+	"Support Ticket": "printechs_support.permissions.support_ticket_permission_query_conditions",
+	"Support Task": "printechs_support.permissions.support_task_permission_query_conditions",
+}
+
+has_permission = {
+	"Support Ticket": "printechs_support.permissions.support_ticket_has_permission",
+	"Support Task": "printechs_support.permissions.support_task_has_permission",
+}
 
 # DocType Class
 # ---------------
 # Override standard doctype classes
 
-# override_doctype_class = {
-# 	"ToDo": "custom_app.overrides.CustomToDo"
-# }
+override_doctype_class = {
+	"Notification": "printechs_support.overrides.notification.PrintechsSupportNotification",
+}
 
 # Document Events
 # ---------------
@@ -148,23 +162,14 @@ app_license = "mit"
 # Scheduled Tasks
 # ---------------
 
-# scheduler_events = {
-# 	"all": [
-# 		"printechs_support.tasks.all"
-# 	],
-# 	"daily": [
-# 		"printechs_support.tasks.daily"
-# 	],
-# 	"hourly": [
-# 		"printechs_support.tasks.hourly"
-# 	],
-# 	"weekly": [
-# 		"printechs_support.tasks.weekly"
-# 	],
-# 	"monthly": [
-# 		"printechs_support.tasks.monthly"
-# 	],
-# }
+scheduler_events = {
+	"daily": [
+		"printechs_support.tasks.daily",
+	],
+	"hourly": [
+		"printechs_support.tasks.hourly",
+	],
+}
 
 # Testing
 # -------
@@ -181,9 +186,9 @@ app_license = "mit"
 # each overriding function accepts a `data` argument;
 # generated from the base implementation of the doctype dashboard,
 # along with any modifications made in other Frappe apps
-# override_doctype_dashboards = {
-# 	"Task": "printechs_support.task.get_dashboard_data"
-# }
+override_doctype_dashboards = {
+	"Project": "printechs_support.printechs_support_system.dashboard.project_dashboard.extend_project_dashboard",
+}
 
 # exempt linked doctypes from being automatically cancelled
 #

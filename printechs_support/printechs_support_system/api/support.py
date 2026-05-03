@@ -10,13 +10,32 @@ from frappe.utils import add_to_date, cint, flt, get_datetime, getdate, now_date
 
 
 def get_initial_support_ticket_status() -> str:
-	"""First workflow state when a Workflow is active; otherwise ``Open`` (DocType default)."""
+	"""Initial ``status`` for new Support Tickets.
+
+	If a legacy Frappe **Workflow** still exists, its first state may be *Draft* or other labels
+	that are not valid options on the Support Ticket ``status`` field (smart workflow vocabulary).
+	In that case we map legacy states and otherwise fall back to ``Open``.
+	"""
 	if not get_workflow_name("Support Ticket"):
 		return "Open"
 	wf = get_workflow("Support Ticket")
 	if not wf.states:
 		return "Open"
-	return wf.states[0].state
+	state = (wf.states[0].state or "").strip()
+	# Same mapping as patches.v1_0.migrate_support_ticket_smart_workflow (keep in sync).
+	legacy = {
+		"Draft": "Open",
+		"Acknowledged": "Assigned",
+		"Waiting for Internal Team": "Waiting for Technician",
+		"Waiting for Approval": "Open",
+		"Reopened": "In Progress",
+	}
+	state = legacy.get(state, state)
+	from printechs_support.printechs_support_system.api.ticket_workflow import WF_STATUSES
+
+	if state not in WF_STATUSES:
+		return "Open"
+	return state
 
 
 def get_active_support_agreements(
@@ -71,6 +90,9 @@ def get_active_support_agreements(
 
 def auto_link_support_agreement(doc) -> None:
 	"""Pick best Support Agreement for the ticket when missing."""
+	if getattr(doc, "work_scope", None) == "Internal":
+		doc.support_agreement = None
+		return
 	if getattr(doc, "support_agreement", None):
 		return
 	customer = getattr(doc, "customer", None)
@@ -120,8 +142,15 @@ def auto_link_support_agreement(doc) -> None:
 def _get_coverage_override(agreement, service_category: str | None) -> tuple[float | None, float | None]:
 	if not service_category or not agreement.coverage_detail:
 		return (None, None)
+	sc = (service_category or "").strip()
 	for row in agreement.coverage_detail:
-		if row.service_category and row.service_category.strip() == service_category.strip() and row.is_covered:
+		if not row.is_covered:
+			continue
+		if row.coverage_type:
+			title = frappe.db.get_value("Coverage Type", row.coverage_type, "title")
+			if title and title.strip() == sc:
+				return (row.response_sla_hours, row.resolution_sla_hours)
+		elif row.service_category and row.service_category.strip() == sc:
 			return (row.response_sla_hours, row.resolution_sla_hours)
 	return (None, None)
 
@@ -208,11 +237,6 @@ def get_sla_working_hours_policy(doc) -> dict:
 
 def apply_sla_to_ticket(doc) -> None:
 	"""Set SLA due datetimes from opening_date + SLA hours (calendar or business hours)."""
-	if not getattr(doc, "support_agreement", None):
-		doc.first_response_due = None
-		doc.resolution_due = None
-		return
-
 	base = getattr(doc, "opening_date", None) or now_datetime()
 	if isinstance(base, str):
 		base = get_datetime(base)
@@ -220,6 +244,11 @@ def apply_sla_to_ticket(doc) -> None:
 
 	first_h, res_h = get_sla_hours_for_ticket(doc)
 	policy = get_sla_working_hours_policy(doc)
+
+	if not getattr(doc, "support_agreement", None):
+		doc.first_response_due = add_to_date(base, hours=first_h, as_datetime=True)
+		doc.resolution_due = add_to_date(base, hours=res_h, as_datetime=True)
+		return
 
 	if policy["use_working_hours"]:
 		from printechs_support.printechs_support_system.api.sla_business_hours import add_working_hours, get_holiday_dates
@@ -321,6 +350,8 @@ def resolve_ticket(ticket_name: str, resolution_summary: str | None = None) -> N
 	doc = frappe.get_doc("Support Ticket", ticket_name)
 	doc.status = "Resolved"
 	doc.resolved_on = now_datetime()
+	doc.action_required_from = "Customer"
+	doc.current_owner_type = "Customer"
 	if resolution_summary:
 		doc.resolution_summary = resolution_summary
 	doc.save()
@@ -337,7 +368,9 @@ def resolve_ticket_api(ticket_name: str, resolution_summary: str | None = None) 
 
 def reopen_ticket(ticket_name: str) -> None:
 	doc = frappe.get_doc("Support Ticket", ticket_name)
-	doc.status = "Reopened"
+	doc.status = "In Progress"
+	doc.action_required_from = "Technician"
+	doc.current_owner_type = "Technician"
 	doc.is_reopened = 1
 	doc.reopened_count = int(doc.reopened_count or 0) + 1
 	doc.save()
@@ -366,6 +399,8 @@ def update_overdue_flags() -> None:
 
 def send_daily_task_reminders() -> None:
 	"""Email assignees for Support Tasks whose reminder date is today."""
+	from html import escape as html_escape
+
 	from frappe.utils import getdate, today
 
 	today_date = getdate(today())
@@ -387,12 +422,21 @@ def send_daily_task_reminders() -> None:
 		ticket = row.support_ticket or ""
 		subj = row.subject or row.name
 		try:
+			desc_html = ""
+			if ticket and frappe.db.exists("Support Ticket", ticket):
+				st_doc = frappe.get_doc("Support Ticket", ticket)
+				desc_html = st_doc.get_acknowledgement_description_block_html(max_chars=2500)
+			message = frappe._(
+				"<p>This is a reminder for support task <b>{0}</b> on ticket <b>{1}</b>.</p>"
+			).format(html_escape(str(subj)), html_escape(str(ticket) or "—"))
+			message += desc_html
 			frappe.sendmail(
 				recipients=[row.assigned_email],
 				subject=frappe._("Reminder: {0} ({1})").format(subj, ticket),
-				message=frappe._(
-					"<p>This is a reminder for support task <b>{0}</b> on ticket <b>{1}</b>.</p>"
-				).format(subj, ticket),
+				message=message,
+				reference_doctype="Support Task",
+				reference_name=row.name,
+				delayed=False,
 			)
 		except Exception:
 			frappe.log_error(frappe.get_traceback(), "send_daily_task_reminders")

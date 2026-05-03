@@ -1,0 +1,28 @@
+Printechs Support — portal release checklist (after git pull)
+=============================================================
+
+These steps run on your Frappe/ERPNext bench (and build machine for the SPA).
+
+1) Bench (each site as needed)
+   bench migrate
+   bench --site <yoursite> clear-cache
+   bench restart
+
+2) CORS (only if the portal is on a different origin than the bench, Option C)
+   Edit sites/<site>/site_config.json OR sites/common_site_config.json and add the
+   portal origin to allow_cors, for example:
+   "allow_cors": ["https://support.customer.com"]
+   See: portal/frappe-site-config.cors.example.json
+   Then: bench restart
+
+3) Rebuild the portal bundle (embeds VITE_FRAPPE_SITE_URL at build time for Option C)
+   From apps/printechs_support:
+   VITE_FRAPPE_SITE_URL=https://your-bench-public-url ./scripts/build-portal.sh
+   If the portal is only served from the same host as ERPNext, you may omit VITE_FRAPPE_SITE_URL.
+
+4) Frappe assets (optional; ensures app public assets are linked)
+   bench build --app printechs_support
+
+5) Static hosting (Option C only)
+   Copy or sync printechs_support/public/portal/ to your web server / CDN.
+   Same checklist as above whenever you change VITE_FRAPPE_SITE_URL or portal code.

@@ -1,0 +1,70 @@
+{
+ "add_total_row": 1,
+ "columns": [],
+ "creation": "2026-04-13 00:00:00.000000",
+ "disabled": 0,
+ "docstatus": 0,
+ "doctype": "Report",
+ "filters": [
+  {
+   "fieldname": "from_date",
+   "fieldtype": "Date",
+   "label": "From Date",
+   "mandatory": 1,
+   "wildcard_filter": 0
+  },
+  {
+   "fieldname": "to_date",
+   "fieldtype": "Date",
+   "label": "To Date",
+   "mandatory": 1,
+   "wildcard_filter": 0
+  },
+  {
+   "fieldname": "employee",
+   "fieldtype": "Link",
+   "label": "Employee (User)",
+   "options": "User",
+   "wildcard_filter": 0
+  },
+  {
+   "fieldname": "include_tasks",
+   "fieldtype": "Check",
+   "label": "Include Support Tasks",
+   "default": "1",
+   "wildcard_filter": 0
+  },
+  {
+   "fieldname": "include_tickets",
+   "fieldtype": "Check",
+   "label": "Include Support Tickets",
+   "default": "1",
+   "wildcard_filter": 0
+  }
+ ],
+ "idx": 0,
+ "is_standard": "Yes",
+ "modified": "2026-04-13 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Printechs Support System",
+ "name": "Employee Support Work Summary",
+ "owner": "Administrator",
+ "prepared_report": 0,
+ "ref_doctype": "Support Ticket",
+ "report_name": "Employee Support Work Summary",
+ "report_type": "Script Report",
+ "roles": [
+  {
+   "role": "Printechs Support Coordinator"
+  },
+  {
+   "role": "Printechs Support Engineer"
+  },
+  {
+   "role": "Printechs Support Project Manager"
+  },
+  {
+   "role": "System Manager"
+  }
+ ]
+}

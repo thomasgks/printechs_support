@@ -29,9 +29,13 @@ from werkzeug.utils import secure_filename
 
 from printechs_support.permissions import (
 	get_allowed_customers,
+	internal_user_may_access_support_ticket,
+	support_task_scope_filters_for_lists,
+	support_ticket_scope_filters_for_lists,
 	user_can_access_support_portal,
 	user_can_edit_portal_task_schedule,
 	user_can_edit_portal_ticket_schedule,
+	user_has_unrestricted_support_ticket_catalog,
 	user_sees_all_support_records,
 )
 from printechs_support.portal_version_history import format_version_row_for_portal
@@ -62,6 +66,63 @@ def _assignee_users_by_parent(child_doctype: str, parent_names: list) -> dict[st
 def get_portal_csrf_token():
 	"""Session CSRF for cross-origin portal SPAs (requires ``allow_cors``). Not needed when embedded in Frappe web pages."""
 	return get_csrf_token()
+
+
+@frappe.whitelist()
+def register_mobile_push_token(expo_push_token: str | None = None):
+	"""Persist Expo push token for the logged-in user (Printechs Support mobile app).
+
+	Call after login so OS notifications can reach this device when staff reply on the ticket.
+	"""
+	user = frappe.session.user
+	if not user or user == "Guest":
+		frappe.throw(_("Login required"), frappe.PermissionError)
+	token = (expo_push_token or "").strip()
+	if not token:
+		frappe.throw(_("Expo push token is required"), frappe.ValidationError)
+	if len(token) < 30 or "ExponentPushToken" not in token:
+		frappe.throw(_("Invalid Expo push token"), frappe.ValidationError)
+	frappe.db.set_value("User", user, "printechs_expo_push_token", token[:500])
+	return {"ok": True}
+
+
+@frappe.whitelist()
+def send_test_mobile_push(user: str | None = None):
+	"""Send one Expo push to verify FCM/EAS + server wiring.
+
+	- Default: sends to **current user** (must have ``register_mobile_push_token`` already).
+	- Optional ``user``: only **Administrator** or **System Manager** may target another User id.
+
+	POST JSON: ``{}`` or ``{ "user": "optional@user.id" }``
+	"""
+	sess = frappe.session.user
+	if not sess or sess == "Guest":
+		frappe.throw(_("Login required"), frappe.PermissionError)
+
+	target = (user or "").strip() or sess
+	if target != sess:
+		if sess != "Administrator" and "System Manager" not in frappe.get_roles():
+			frappe.throw(_("Only System Manager can send a test push to another user"), frappe.PermissionError)
+		if not frappe.db.exists("User", target):
+			frappe.throw(_("User not found"), frappe.DoesNotExistError)
+
+	tok = frappe.db.get_value("User", target, "printechs_expo_push_token")
+	if not tok or not str(tok).strip():
+		frappe.throw(
+			_("No Expo push token for this user. Open the mobile app, log in, and let it call register_mobile_push_token."),
+			frappe.ValidationError,
+		)
+
+	from printechs_support.printechs_support_system.api.mobile_push import send_expo_push_to_users
+
+	send_expo_push_to_users(
+		[target],
+		title=_("Printechs Support test"),
+		body=_("If you see this, push notifications are working."),
+		data={"type": "test", "ticket_name": ""},
+		ticket_name="TEST-PUSH",
+	)
+	return {"ok": True, "target": target, "message": _("Test notification sent via Expo.")}
 
 
 def _portal_login_rate_limit():
@@ -150,18 +211,165 @@ def get_portal_bootstrap():
 _VALID_CREATE_PRIORITIES = frozenset({"Low", "Medium", "High", "Critical"})
 
 
+def _ticket_type_names_from_customer_mapping(customer: str) -> list[str] | None:
+	"""Return allowed Support Ticket Type **names** from Customer child table.
+
+	- ``None`` = mapping not used (no rows or DocType missing) → caller may show **all** active types.
+	- ``[]`` = mapping exists but no valid types → portal shows **no** types.
+	- non-empty list = restrict to these names (still must be active).
+	"""
+	if not customer or not frappe.db.exists("Customer", customer):
+		return None
+	if not frappe.db.exists("DocType", "Customer Allowed Ticket Type"):
+		return None
+	cnt = frappe.db.count(
+		"Customer Allowed Ticket Type",
+		{
+			"parent": customer,
+			"parenttype": "Customer",
+			"parentfield": "printechs_allowed_ticket_types",
+		},
+	)
+	if cnt == 0:
+		return None
+	names = frappe.db.sql_list(
+		"""
+		SELECT ticket_type
+		FROM `tabCustomer Allowed Ticket Type`
+		WHERE parent=%s AND parenttype='Customer' AND parentfield=%s
+		AND IFNULL(ticket_type,'') != ''
+		ORDER BY idx ASC
+		""",
+		(customer, "printechs_allowed_ticket_types"),
+	)
+	seen: set[str] = set()
+	out: list[str] = []
+	for n in names:
+		if n and n not in seen:
+			seen.add(n)
+			out.append(n)
+	return out
+
+
+def _active_support_agreement_names_for_portal(customer: str) -> list[str]:
+	"""Support Agreement names that are active, portal-visible, allow tickets, and in validity window."""
+	if not customer or not frappe.db.exists("Customer", customer):
+		return []
+	t = today()
+	return frappe.db.sql_list(
+		"""
+		SELECT name FROM `tabSupport Agreement`
+		WHERE customer=%s
+			AND status='Active'
+			AND IFNULL(portal_visible,0)=1
+			AND IFNULL(allows_ticket_creation,0)=1
+			AND (valid_from IS NULL OR valid_from <= %s)
+			AND (valid_to IS NULL OR valid_to >= %s)
+		""",
+		(customer, t, t),
+	)
+
+
+def _ticket_type_names_from_agreement_mapping(customer: str) -> list[str] | None:
+	"""Allowed types from **active** Support Agreements when that child table has rows.
+
+	- ``None`` = no agreement rows → fall back to Customer / all types.
+	- ``[]`` / non-empty = same semantics as customer mapping.
+	"""
+	if not customer:
+		return None
+	if not frappe.db.exists("DocType", "Customer Allowed Ticket Type"):
+		return None
+	if not frappe.db.exists("DocType", "Support Agreement"):
+		return None
+	ags = _active_support_agreement_names_for_portal(customer)
+	if not ags:
+		return None
+	cnt = frappe.db.count(
+		"Customer Allowed Ticket Type",
+		{
+			"parent": ["in", ags],
+			"parenttype": "Support Agreement",
+			"parentfield": "printechs_agreement_allowed_ticket_types",
+		},
+	)
+	if cnt == 0:
+		return None
+	rows = frappe.get_all(
+		"Customer Allowed Ticket Type",
+		filters={
+			"parent": ["in", ags],
+			"parenttype": "Support Agreement",
+			"parentfield": "printechs_agreement_allowed_ticket_types",
+		},
+		fields=["ticket_type"],
+		order_by="idx asc",
+	)
+	seen: set[str] = set()
+	out: list[str] = []
+	for r in rows:
+		n = (r.get("ticket_type") or "").strip()
+		if n and n not in seen:
+			seen.add(n)
+			out.append(n)
+	return out
+
+
+def _ticket_type_names_from_mapping(customer: str) -> list[str] | None:
+	"""Agreement mapping takes precedence over Customer when active agreements define types."""
+	ag = _ticket_type_names_from_agreement_mapping(customer)
+	if ag is not None:
+		return ag
+	return _ticket_type_names_from_customer_mapping(customer)
+
+
+def _resolve_customer_for_portal_ticket_types(user: str, customer: str | None) -> str | None:
+	"""Which Customer record to use for ticket-type mapping (may be None → all types)."""
+	c = (customer or "").strip()
+	if user_sees_all_support_records(user):
+		return c or None
+	allowed = get_allowed_customers(user)
+	if not allowed:
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+	if len(allowed) == 1:
+		return allowed[0]
+	if not c:
+		return None
+	if c not in allowed:
+		frappe.throw(_("Invalid customer"), frappe.ValidationError)
+	return c
+
+
 @frappe.whitelist()
-def get_portal_ticket_types():
-	"""Active Support Ticket Types for the create-ticket form (customer and internal users)."""
+def get_portal_ticket_types(customer: str | None = None):
+	"""Active Support Ticket Types for the create-ticket form (customer and internal users).
+
+	When an **active, portal-visible Support Agreement** has rows in **Allowed ticket types**, those
+	take precedence. Otherwise, when the **Customer** has rows in **Portal — Allowed Ticket Types**,
+	only those types are returned. If both are empty, all active types are returned.
+
+	:param customer: Optional Customer id; internal users should pass the selected customer.
+	"""
 	user = frappe.session.user
 	if user == "Guest":
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
 	if not user_can_access_support_portal(user):
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
 
+	cust = _resolve_customer_for_portal_ticket_types(user, customer)
+
+	filters: dict = {"is_active": 1}
+	mapped: list[str] | None = None
+	if cust:
+		mapped = _ticket_type_names_from_mapping(cust)
+		if mapped is not None:
+			if not mapped:
+				return {"types": [], "restricted": True}
+			filters["name"] = ["in", mapped]
+
 	rows = frappe.get_all(
 		"Support Ticket Type",
-		filters={"is_active": 1},
+		filters=filters,
 		fields=["name", "ticket_type_name", "division"],
 		order_by="ticket_type_name asc",
 		limit_page_length=500,
@@ -174,7 +382,8 @@ def get_portal_ticket_types():
 				"division": r.division or "",
 			}
 			for r in rows
-		]
+		],
+		"restricted": mapped is not None,
 	}
 
 
@@ -274,8 +483,13 @@ def create_portal_ticket(
 	priority: str = "Medium",
 	customer: str | None = None,
 	ticket_type: str | None = None,
+	work_scope: str | None = None,
 ):
-	"""Create a Support Ticket from the portal (customer or internal user)."""
+	"""Create a Support Ticket from the portal (customer or internal user).
+
+	Internal team members may pass ``work_scope='Internal'`` for test / internal-only tickets (no Customer).
+	Portal customers always get customer-facing tickets; any ``work_scope`` other than empty/Customer is rejected.
+	"""
 	user = frappe.session.user
 	if user == "Guest":
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
@@ -299,27 +513,55 @@ def create_portal_ticket(
 		frappe.throw(_("Invalid priority"), frappe.ValidationError)
 
 	internal = user_sees_all_support_records(user)
-	allowed = get_allowed_customers(user)
-	cust = (customer or "").strip()
+	ws_raw = (work_scope or "").strip()
+	want_internal = ws_raw.lower() == "internal"
 
-	if internal:
-		if not cust:
-			frappe.throw(_("Customer is required"), frappe.ValidationError)
-		if not frappe.db.exists("Customer", cust):
-			frappe.throw(_("Invalid customer"), frappe.ValidationError)
+	if ws_raw and not want_internal and ws_raw.lower() not in ("customer", ""):
+		frappe.throw(_("Invalid work scope"), frappe.ValidationError)
+
+	if want_internal:
+		if not internal:
+			frappe.throw(_("Only internal team members can create internal work-scope tickets."), frappe.PermissionError)
+		cust = ""
 	else:
-		if not allowed:
-			frappe.throw(
-				_(
-					"No customer is linked to your user. Ask an administrator to assign User Permissions "
-					"or link your user to a Contact for a Customer."
-				),
-				frappe.PermissionError,
-			)
-		if len(allowed) == 1:
-			cust = allowed[0]
-		elif not cust or cust not in allowed:
-			frappe.throw(_("Please select a customer"), frappe.ValidationError)
+		allowed = get_allowed_customers(user)
+		cust = (customer or "").strip()
+
+		if internal:
+			if not cust:
+				frappe.throw(_("Customer is required"), frappe.ValidationError)
+			if not frappe.db.exists("Customer", cust):
+				frappe.throw(_("Invalid customer"), frappe.ValidationError)
+		else:
+			if not allowed:
+				frappe.throw(
+					_(
+						"No customer is linked to your user. Ask an administrator to assign User Permissions "
+						"or link your user to a Contact for a Customer."
+					),
+					frappe.PermissionError,
+				)
+			if len(allowed) == 1:
+				cust = allowed[0]
+			elif not cust or cust not in allowed:
+				frappe.throw(_("Please select a customer"), frappe.ValidationError)
+
+	if not want_internal:
+		mapped = _ticket_type_names_from_mapping(cust)
+		if mapped is not None:
+			if not mapped:
+				frappe.throw(
+					_(
+						"No ticket types are configured for this customer in the portal "
+						"(check Support Agreement → Allowed ticket types or Customer → Portal — Allowed Ticket Types)."
+					),
+					frappe.ValidationError,
+				)
+			if tt not in mapped:
+				frappe.throw(
+					_("This ticket type is not allowed for the selected customer."),
+					frappe.ValidationError,
+				)
 
 	desc = ""
 	if description and str(description).strip():
@@ -330,56 +572,242 @@ def create_portal_ticket(
 		desc = f"<p>{html_escape(subject)}</p>"
 
 	initial_status = get_initial_support_ticket_status()
-	doc = frappe.get_doc(
-		{
-			"doctype": "Support Ticket",
-			"naming_series": "SUP-TKT-.YYYY.-.#####",
-			"subject": subject,
-			"customer": cust,
-			"ticket_type": tt,
-			"priority": priority,
-			"status": initial_status,
-			"description": desc,
-		}
-	)
+	row = {
+		"doctype": "Support Ticket",
+		"naming_series": "SUP-TKT-.YYYY.-.#####",
+		"subject": subject,
+		"ticket_type": tt,
+		"priority": priority,
+		"status": initial_status,
+		"description": desc,
+	}
+	if want_internal:
+		row["work_scope"] = "Internal"
+		row["action_required_from"] = "Technician"
+		row["current_owner_type"] = "Technician"
+	else:
+		row["customer"] = cust
+		row["action_required_from"] = "Manager"
+		row["current_owner_type"] = "Manager"
+
+	doc = frappe.get_doc(row)
 	doc.flags.priority_from_portal = 1
+	doc.insert(ignore_permissions=True)
+
+	out = {
+		"name": doc.name,
+		"subject": doc.subject,
+		"status": doc.status,
+		"customer": doc.customer or "",
+		"work_scope": doc.work_scope or "Customer",
+	}
+	return out
+
+
+def _valid_support_task_types() -> list[str]:
+	meta = frappe.get_meta("Support Task")
+	f = meta.get_field("task_type")
+	if not f or not f.options:
+		return ["Internal Task"]
+	return [x.strip() for x in str(f.options).split("\n") if x.strip()]
+
+
+_STANDALONE_TASK_DIVISIONS = frozenset({"Software", "Industrial", "Retail"})
+
+
+def _normalize_optional_ticket(support_ticket) -> str | None:
+	"""Treat blank / null-like JSON values as no ticket (internal standalone)."""
+	if support_ticket is None:
+		return None
+	if isinstance(support_ticket, (int, float)):
+		if support_ticket == 0:
+			return None
+		s = str(support_ticket).strip()
+		return s if s else None
+	s = str(support_ticket).strip()
+	if not s or s.lower() in ("null", "none", "undefined"):
+		return None
+	return s
+
+_PORTAL_TASK_LIST_FIELDS = [
+	"name",
+	"subject",
+	"status",
+	"task_type",
+	"modified",
+	"support_ticket",
+	"customer",
+	"division",
+	"assigned_to_user",
+	"due_date",
+	"delay_owner",
+	"delay_reason",
+	"is_delayed",
+	"delay_days",
+	"creation",
+]
+
+
+def _wire_portal_task_rows(tasks: list) -> None:
+	"""Mutate get_all rows: due_date wire + assigned_users."""
+	names = [t["name"] for t in tasks]
+	amap = _assignee_users_by_parent("Support Task Assignee", names)
+	for t in tasks:
+		ds, dc = _portal_due_datetime_wire(t.get("due_date"))
+		t["due_date"] = ds
+		t["due_date_calendar"] = dc
+		t["assigned_users"] = amap.get(t["name"], [])
+
+
+@frappe.whitelist()
+def create_portal_support_task(
+	support_ticket: str | None = None,
+	subject: str = "",
+	task_type: str | None = None,
+	due_date: str | None = None,
+	division: str | None = None,
+	description: str | None = None,
+):
+	"""Create a Support Task from the portal.
+
+	- With **support_ticket**: any portal user who can see that ticket (scoped customers or internal).
+	- Without ticket (**internal team only**): standalone internal task; **division** must be Software / Industrial / Retail.
+	- **description**: optional; plain text or HTML (sanitized).
+	"""
+	user = frappe.session.user
+	if user == "Guest":
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+	if not user_can_access_support_portal(user):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+	ticket_name = _normalize_optional_ticket(support_ticket)
+	subject = (subject or "").strip()
+	if not subject:
+		frappe.throw(_("Subject is required"), frappe.ValidationError)
+
+	if ticket_name:
+		if not frappe.db.exists("Support Ticket", ticket_name):
+			frappe.throw(
+				_("Support ticket {0} does not exist or you have no access.").format(ticket_name),
+				frappe.ValidationError,
+			)
+		_assert_portal_ticket_access(user, ticket_name)
+	else:
+		if not user_sees_all_support_records(user):
+			frappe.throw(
+				_("Only internal team members can create tasks without a support ticket."),
+				frappe.PermissionError,
+			)
+		div = (division or "").strip()
+		if not div or div not in _STANDALONE_TASK_DIVISIONS:
+			frappe.throw(
+				_("Division is required when no ticket is linked (Software, Industrial, or Retail)."),
+				frappe.ValidationError,
+			)
+
+	valid_types = _valid_support_task_types()
+	tt = (task_type or (valid_types[0] if valid_types else "Internal Task")).strip()
+	if tt not in valid_types:
+		frappe.throw(_("Invalid task type"), frappe.ValidationError)
+
+	rows: dict = {
+		"doctype": "Support Task",
+		"naming_series": "SUP-TSK-.YYYY.-.#####",
+		"subject": subject,
+		"task_type": tt,
+		"status": "Open",
+	}
+	if ticket_name:
+		rows["support_ticket"] = ticket_name
+	else:
+		rows["division"] = (division or "").strip()
+
+	desc_raw = (description or "").strip() if description else ""
+	if desc_raw:
+		if "<" in desc_raw:
+			desc_val = sanitize_html(desc_raw)
+			if not strip_html(desc_val).strip():
+				desc_val = ""
+		else:
+			desc_val = f"<p>{html_escape(desc_raw).replace(chr(10), '<br>')}</p>"
+		if desc_val:
+			rows["description"] = desc_val
+
+	doc = frappe.get_doc(rows)
+	dd = (due_date or "").strip()
+	if dd:
+		doc.due_date = dd
 	doc.insert(ignore_permissions=True)
 
 	return {
 		"name": doc.name,
 		"subject": doc.subject,
 		"status": doc.status,
-		"customer": doc.customer,
+		"support_ticket": doc.support_ticket or None,
+		"division": doc.division or None,
 	}
 
 
 @frappe.whitelist()
-def get_portal_tickets(limit: int = 50):
+def get_portal_tickets(limit: int = 50, search: str | None = None, active_only: int | bool = 0):
+	"""List tickets for the portal.
+
+	:param search: Optional filter on ticket ID (``name`` contains search string).
+	:param active_only: If truthy, exclude Resolved / Closed / Cancelled. Default **0** so callers
+		that only pass ``limit`` (older portal bundles) still see all tickets; the SPA sends
+		``active_only=1`` when the list should hide closed tickets.
+	"""
 	user = frappe.session.user
 	if user == "Guest":
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
 
-	limit = min(int(limit), 100)
+	# Cap above 100 so calendar / heavy lists can request more rows in one call.
+	limit = min(int(limit), 300)
+	active = bool(cint(active_only))
+	q = (search or "").strip()
 
-	if user_sees_all_support_records(user):
-		return frappe.get_all(
-			"Support Ticket",
-			fields=["name", "subject", "status", "priority", "modified", "customer"],
-			order_by="modified desc",
-			limit_page_length=limit,
-		)
-
-	customers = get_allowed_customers(user)
-	if not customers:
+	scope = support_ticket_scope_filters_for_lists(user)
+	if scope.get("empty"):
 		return []
 
-	return frappe.get_all(
+	filters: dict = {k: v for k, v in scope.items() if k != "empty"}
+
+	if active:
+		filters["status"] = ["not in", ["Resolved", "Closed", "Cancelled"]]
+
+	if q:
+		qn = q.strip()
+		if "name" in filters and isinstance(filters["name"], list) and filters["name"][0] == "in":
+			allowed = list(filters["name"][1] or [])
+			filters["name"] = ["in", [n for n in allowed if qn.lower() in str(n).lower()]]
+		else:
+			filters["name"] = ["like", f"%{qn}%"]
+
+	rows = frappe.get_all(
 		"Support Ticket",
-		filters={"customer": ["in", customers]},
-		fields=["name", "subject", "status", "priority", "modified", "customer"],
+		filters=filters or None,
+		fields=[
+			"name",
+			"subject",
+			"status",
+			"priority",
+			"modified",
+			"customer",
+			"due_date",
+			"assigned_to",
+		],
 		order_by="modified desc",
 		limit_page_length=limit,
 	)
+	for r in rows:
+		ds, dc = _portal_due_datetime_wire(r.get("due_date"))
+		r["due_date"] = ds
+		r["due_date_calendar"] = dc
+	ticket_names = [r["name"] for r in rows]
+	amap_tickets = _assignee_users_by_parent("Support Ticket Assignee", ticket_names)
+	for r in rows:
+		r["assigned_users"] = amap_tickets.get(r["name"], [])
+	return rows
 
 
 @frappe.whitelist()
@@ -388,79 +816,123 @@ def get_portal_tasks(limit: int = 50):
 	if user == "Guest":
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
 
-	limit = min(int(limit), 100)
+	limit = min(int(limit), 300)
 
-	_task_fields = [
-		"name",
-		"subject",
-		"status",
-		"task_type",
-		"modified",
-		"support_ticket",
-		"customer",
-		"assigned_to_user",
-		"due_date",
-		"delay_owner",
-		"delay_reason",
-		"is_delayed",
-		"delay_days",
-		"creation",
-	]
+	scope = support_task_scope_filters_for_lists(user)
+	if scope.get("empty"):
+		return []
 
-	if user_sees_all_support_records(user):
-		tasks = frappe.get_all(
-			"Support Task",
-			fields=_task_fields,
-			order_by="modified desc",
-			limit_page_length=limit,
-		)
-	else:
-		customers = get_allowed_customers(user)
-		if not customers:
-			return []
+	task_filters = {k: v for k, v in scope.items() if k != "empty"}
+	tasks = frappe.get_all(
+		"Support Task",
+		filters=task_filters or None,
+		fields=_PORTAL_TASK_LIST_FIELDS,
+		order_by="modified desc",
+		limit_page_length=limit,
+	)
 
-		tickets = frappe.get_all(
-			"Support Ticket",
-			filters={"customer": ["in", customers]},
-			pluck="name",
-		)
-		if not tickets:
-			return []
-
-		tasks = frappe.get_all(
-			"Support Task",
-			filters={"support_ticket": ["in", tickets]},
-			fields=_task_fields,
-			order_by="modified desc",
-			limit_page_length=limit,
-		)
-
-	names = [t["name"] for t in tasks]
-	amap = _assignee_users_by_parent("Support Task Assignee", names)
-	for t in tasks:
-		t["assigned_users"] = amap.get(t["name"], [])
+	_wire_portal_task_rows(tasks)
 	return tasks
 
 
-_TERMINAL_TICKET_STATUS = ("Closed", "Cancelled", "Resolved")
+@frappe.whitelist()
+def get_portal_tasks_for_ticket(ticket_name: str, limit: int = 100):
+	"""Tasks linked to a ticket (portal). Respects the same ticket access rules as get_portal_ticket."""
+	user = frappe.session.user
+	if user == "Guest":
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+	if not user_can_access_support_portal(user):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+	name = (ticket_name or "").strip()
+	if not name or not frappe.db.exists("Support Ticket", name):
+		frappe.throw(_("Not found"), frappe.DoesNotExistError)
+
+	_assert_portal_ticket_access(user, name)
+
+	limit = min(int(limit), 300)
+	tasks = frappe.get_all(
+		"Support Task",
+		filters={"support_ticket": name},
+		fields=_PORTAL_TASK_LIST_FIELDS,
+		order_by="modified desc",
+		limit_page_length=limit,
+	)
+	_wire_portal_task_rows(tasks)
+	return tasks
+
+
+# Resolved still allows customer confirmation / structured workflow replies.
+_ARCHIVED_TICKET_STATUSES = frozenset({"Closed", "Cancelled"})
 _TERMINAL_TASK_STATUS = ("Completed", "Cancelled")
+# Block ad-hoc comments only when archived; use workflow actions on Resolved tickets.
+_COMMUNICATION_LOCKED_TICKET_STATUSES = frozenset(_ARCHIVED_TICKET_STATUSES)
+
+
+def _ticket_communication_locked(status: str | None) -> bool:
+	return (status or "").strip() in _COMMUNICATION_LOCKED_TICKET_STATUSES
+
+
+def _assert_ticket_communication_allowed(ticket_name: str) -> None:
+	st = frappe.db.get_value("Support Ticket", ticket_name, "status")
+	if _ticket_communication_locked(st):
+		frappe.throw(
+			_("This ticket is resolved or closed. Reopen it to add messages or attachments."),
+			frappe.ValidationError,
+		)
+
+
+def _assert_task_communication_allowed(task_name: str) -> None:
+	"""Allow task comments unless the linked ticket is locked, or (standalone task) task is terminal."""
+	row = frappe.db.get_value(
+		"Support Task",
+		task_name,
+		["support_ticket", "status"],
+		as_dict=True,
+	)
+	if not row:
+		frappe.throw(_("Not found"), frappe.DoesNotExistError)
+	if row.support_ticket:
+		_assert_ticket_communication_allowed(row.support_ticket)
+		return
+	st = (row.status or "").strip()
+	if st in _TERMINAL_TASK_STATUS:
+		frappe.throw(
+			_("This task is completed or cancelled. Reopen it in Desk to add messages or attachments."),
+			frappe.ValidationError,
+		)
+
+
+def _ticket_scope_filters(user: str) -> dict:
+	"""Filters for Support Ticket queries; ``{'empty': True}`` means no visible tickets."""
+	return support_ticket_scope_filters_for_lists(user)
+
+
+def _count_tickets(user: str, filters: dict) -> int:
+	scope = _ticket_scope_filters(user)
+	if scope.get("empty"):
+		return 0
+	merged = {**filters, **{k: v for k, v in scope.items() if k != "empty"}}
+	return int(frappe.db.count("Support Ticket", merged))
+
+
+def _ticket_status_counts(user: str) -> dict:
+	scope = _ticket_scope_filters(user)
+	if scope.get("empty"):
+		return {}
+	filters = {k: v for k, v in scope.items() if k != "empty"}
+	rows = frappe.get_all(
+		"Support Ticket",
+		filters=filters,
+		pluck="status",
+		limit_page_length=10000,
+	)
+	return dict(Counter(rows))
 
 
 def _task_scope_filters(user: str) -> dict:
 	"""Filters for Support Task queries; ``{'empty': True}`` means no visible tasks."""
-	if user_sees_all_support_records(user):
-		return {}
-	customers = get_allowed_customers(user)
-	if not customers:
-		return {"empty": True}
-	tickets = frappe.get_all(
-		"Support Ticket",
-		filters={"customer": ["in", customers]},
-		pluck="name",
-	)
-	if not tickets:
-		return {"empty": True}
-	return {"support_ticket": ["in", tickets]}
+	return support_task_scope_filters_for_lists(user)
 
 
 def _count_tasks(user: str, filters: dict) -> int:
@@ -554,6 +1026,9 @@ def get_portal_dashboard_stats():
 	if scope.get("empty"):
 		return {
 			"pending_tickets": 0,
+			"overdue_tickets": 0,
+			"tickets_waiting_customer": 0,
+			"tickets_waiting_internal": 0,
 			"pending_tasks": 0,
 			"overdue_tasks": 0,
 			"completed_today": 0,
@@ -561,25 +1036,21 @@ def get_portal_dashboard_stats():
 			"waiting_internal": 0,
 			"sla_breached": 0,
 			"delayed_flagged": 0,
+			"tickets_by_status": {},
 			"tasks_by_status": {},
 			"assignee_load": [],
 			"monthly_completion": [],
 		}
 
-	if user_sees_all_support_records(user):
-		pending_tickets = frappe.db.count(
-			"Support Ticket",
-			{"status": ["not in", _TERMINAL_TICKET_STATUS]},
-		)
-	else:
-		customers = get_allowed_customers(user)
-		pending_tickets = frappe.db.count(
-			"Support Ticket",
-			{
-				"customer": ["in", customers],
-				"status": ["not in", _TERMINAL_TICKET_STATUS],
-			},
-		)
+	active_statuses = ["not in", list(_ARCHIVED_TICKET_STATUSES)]
+	pending_tickets = _count_tickets(user, {"status": active_statuses})
+	overdue_tickets = _count_tickets(
+		user,
+		{"due_date": ["<", now], "status": ["not in", ["Closed", "Cancelled", "Resolved"]]},
+	)
+	tickets_waiting_customer = _count_tickets(user, {"status": "Waiting for Customer"})
+	tickets_waiting_internal = _count_tickets(user, {"status": "Waiting for Technician"})
+	tickets_by_status = _ticket_status_counts(user)
 
 	pending_tasks = _count_tasks(user, {"status": ["not in", _TERMINAL_TASK_STATUS]})
 	overdue_tasks = _count_tasks(
@@ -608,6 +1079,9 @@ def get_portal_dashboard_stats():
 
 	return {
 		"pending_tickets": int(pending_tickets),
+		"overdue_tickets": int(overdue_tickets),
+		"tickets_waiting_customer": int(tickets_waiting_customer),
+		"tickets_waiting_internal": int(tickets_waiting_internal),
 		"pending_tasks": int(pending_tasks),
 		"overdue_tasks": int(overdue_tasks),
 		"completed_today": int(completed_today),
@@ -615,6 +1089,7 @@ def get_portal_dashboard_stats():
 		"waiting_internal": int(waiting_internal),
 		"sla_breached": int(sla_breached),
 		"delayed_flagged": int(delayed_flagged),
+		"tickets_by_status": tickets_by_status,
 		"tasks_by_status": tasks_by_status,
 		"assignee_load": assignee_load,
 		"monthly_completion": monthly_completion,
@@ -622,23 +1097,43 @@ def get_portal_dashboard_stats():
 
 
 def _assert_portal_ticket_access(user: str, ticket_name: str) -> None:
-	if user_sees_all_support_records(user):
+	if user_has_unrestricted_support_ticket_catalog(user):
 		return
-	customers = get_allowed_customers(user)
-	if not customers:
-		frappe.throw(_("Not permitted"), frappe.PermissionError)
 	cust = frappe.db.get_value("Support Ticket", ticket_name, "customer")
-	if not cust or cust not in customers:
+	allowed_cust = get_allowed_customers(user)
+	if allowed_cust and cust and cust in allowed_cust:
+		return
+	if user_sees_all_support_records(user):
+		if internal_user_may_access_support_ticket(user, ticket_name):
+			return
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+	if not allowed_cust:
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+	if not cust or cust not in allowed_cust:
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
 
 
 def _assert_portal_task_access(user: str, task_name: str) -> None:
-	if user_sees_all_support_records(user):
+	if user_has_unrestricted_support_ticket_catalog(user):
 		return
+	ticket = frappe.db.get_value("Support Task", task_name, "support_ticket")
+	if ticket:
+		cust = frappe.db.get_value("Support Ticket", ticket, "customer")
+		allowed_cust = get_allowed_customers(user)
+		if allowed_cust and cust and cust in allowed_cust:
+			return
+	if user_sees_all_support_records(user):
+		if ticket:
+			if internal_user_may_access_support_ticket(user, ticket):
+				return
+		elif frappe.db.get_value("Support Task", task_name, "assigned_to_user") == user:
+			return
+		elif frappe.db.exists("Support Task Assignee", {"parent": task_name, "user": user}):
+			return
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
 	customers = get_allowed_customers(user)
 	if not customers:
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
-	ticket = frappe.db.get_value("Support Task", task_name, "support_ticket")
 	if not ticket:
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
 	cust = frappe.db.get_value("Support Ticket", ticket, "customer")
@@ -646,9 +1141,32 @@ def _assert_portal_task_access(user: str, task_name: str) -> None:
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
 
 
+def _portal_due_datetime_wire(val):
+	"""Return ``(string, YYYY-MM-DD)`` for naive MariaDB datetimes.
+
+	JavaScript ``new Date('YYYY-MM-DD HH:mm:ss').toISOString().slice(0, 10)`` shifts the
+	calendar day (UTC vs local). Expose an explicit calendar date for agenda-style clients.
+	"""
+	if val is None:
+		return None, None
+	s = str(val).strip()
+	if not s:
+		return None, None
+	if len(s) >= 26 and s[19] == ".":
+		s = s[:19]
+	cal = None
+	if len(s) >= 10 and s[4] == "-" and s[7] == "-":
+		cal = s[:10]
+	return s, cal
+
+
 @frappe.whitelist()
 def get_portal_ticket(name: str):
-	"""Single ticket for the React portal (no desk / web form redirect)."""
+	"""Single ticket for the React portal (no desk / web form redirect).
+
+	Always includes ``due_date`` (and ``due_date_calendar``) from Support Ticket. If the DocType has
+	``expected_delivery_date`` (e.g. customized site / Desk field), that is fetched and returned too.
+	"""
 	user = frappe.session.user
 	if user == "Guest":
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
@@ -658,28 +1176,43 @@ def get_portal_ticket(name: str):
 		frappe.throw(_("Not found"), frappe.DoesNotExistError)
 
 	_assert_portal_ticket_access(user, name)
+	ticket_meta = frappe.get_meta("Support Ticket")
 	# Read from DB so schedule fields are not stripped by Doc field-permission rules for portal users.
+	row_fields = [
+		"name",
+		"subject",
+		"status",
+		"priority",
+		"ticket_type",
+		"team",
+		"division",
+		"customer",
+		"customer_name",
+		"assigned_to",
+		"action_required_from",
+		"current_owner_type",
+		"modified",
+		"opening_date",
+		"due_date",
+		"waiting_since",
+		"description",
+		"customer_resolution_deadline",
+		"customer_confirmation_required",
+		"resolved_on",
+		"closed_on",
+		"last_customer_reply_on",
+		"last_technician_reply_on",
+		"resolution_summary",
+		"resolution_type",
+		"root_cause",
+	]
+	if ticket_meta.has_field("expected_delivery_date"):
+		row_fields.insert(row_fields.index("due_date") + 1, "expected_delivery_date")
+
 	row = frappe.db.get_value(
 		"Support Ticket",
 		name,
-		[
-			"name",
-			"subject",
-			"status",
-			"priority",
-			"ticket_type",
-			"team",
-			"division",
-			"customer",
-			"customer_name",
-			"assigned_to",
-			"modified",
-			"opening_date",
-			"due_date",
-			"description",
-			"customer_resolution_deadline",
-			"customer_confirmation_required",
-		],
+		row_fields,
 		as_dict=True,
 	)
 	if not row:
@@ -691,14 +1224,23 @@ def get_portal_ticket(name: str):
 	def _dt(val):
 		return str(val) if val else None
 
+	due_s, due_cal = _portal_due_datetime_wire(row.due_date)
+
 	ticket_assignees = _assignee_users_by_parent("Support Ticket Assignee", [name]).get(name, [])
 	tt_label = ""
 	if row.ticket_type:
 		tt_label = frappe.db.get_value("Support Ticket Type", row.ticket_type, "ticket_type_name") or row.ticket_type
 
 	can_edit_ticket_schedule = user_can_edit_portal_ticket_schedule(user, name)
+	internal = user_sees_all_support_records(user)
 
-	return {
+	res_html = row.get("resolution_summary") or ""
+	if res_html:
+		res_html = sanitize_html(str(res_html))
+
+	comm_locked = _ticket_communication_locked(row.status)
+
+	out = {
 		"name": row.name,
 		"subject": row.subject,
 		"status": row.status,
@@ -710,15 +1252,31 @@ def get_portal_ticket(name: str):
 		"customer": row.customer or "",
 		"customer_name": row.customer_name or "",
 		"assigned_to": row.assigned_to or "",
+		"action_required_from": getattr(row, "action_required_from", None) or "",
+		"current_owner_type": getattr(row, "current_owner_type", None) or "",
 		"assigned_users": ticket_assignees,
 		"modified": _dt(row.modified),
 		"opening_date": _dt(row.opening_date),
-		"due_date": _dt(row.due_date),
+		"due_date": due_s,
+		"due_date_calendar": due_cal,
+		"waiting_since": _dt(getattr(row, "waiting_since", None)),
 		"description": desc,
 		"customer_resolution_deadline": _dt(row.customer_resolution_deadline),
 		"customer_confirmation_required": int(row.customer_confirmation_required or 0),
 		"can_edit_ticket_schedule": bool(can_edit_ticket_schedule),
+		"resolved_on": _dt(row.resolved_on),
+		"closed_on": _dt(row.closed_on),
+		"last_customer_reply_on": _dt(getattr(row, "last_customer_reply_on", None)),
+		"last_technician_reply_on": _dt(getattr(row, "last_technician_reply_on", None)),
+		"resolution_type": row.resolution_type or "",
+		"resolution_summary_html": res_html,
+		"communication_locked": comm_locked,
 	}
+	if ticket_meta.has_field("expected_delivery_date"):
+		out["expected_delivery_date"] = _dt(row.get("expected_delivery_date"))
+	if internal:
+		out["root_cause"] = (row.root_cause or "").strip() or None
+	return out
 
 
 @frappe.whitelist()
@@ -783,9 +1341,18 @@ def get_portal_task(name: str):
 		except (TypeError, ValueError):
 			return None
 
+	due_s, due_cal = _portal_due_datetime_wire(row.due_date)
+
 	task_assignees = _assignee_users_by_parent("Support Task Assignee", [name]).get(name, [])
 
 	can_edit_task_schedule = user_can_edit_portal_task_schedule(user, name)
+
+	task_comm_locked = False
+	if row.support_ticket:
+		tst = frappe.db.get_value("Support Ticket", row.support_ticket, "status")
+		task_comm_locked = _ticket_communication_locked(tst)
+	else:
+		task_comm_locked = (row.status or "").strip() in _TERMINAL_TASK_STATUS
 
 	return {
 		"name": row.name,
@@ -803,7 +1370,8 @@ def get_portal_task(name: str):
 		"predecessor_task": row.predecessor_task or "",
 		"modified": _dt(row.modified),
 		"creation": _dt(row.creation),
-		"due_date": _dt(row.due_date),
+		"due_date": due_s,
+		"due_date_calendar": due_cal,
 		"planned_start_date": _dt(row.planned_start_date),
 		"planned_end_date": _dt(row.planned_end_date),
 		"actual_start_date": _dt(row.actual_start_date),
@@ -814,26 +1382,26 @@ def get_portal_task(name: str):
 		"delay_remarks": row.delay_remarks or "",
 		"delay_days": _num(row.delay_days),
 		"description": desc,
+		"communication_locked": bool(task_comm_locked),
 		"can_edit_task_schedule": bool(can_edit_task_schedule),
 	}
 
 
 _SUPPORT_TICKET_STATUSES = (
-	"Draft",
 	"Open",
-	"Acknowledged",
+	"Assigned",
 	"In Progress",
 	"Waiting for Customer",
-	"Waiting for Internal Team",
-	"Waiting for Approval",
+	"Waiting for Technician",
 	"Resolved",
 	"Closed",
 	"Cancelled",
-	"Reopened",
 )
 _TERMINAL_TICKET_STATUSES = frozenset({"Resolved", "Closed", "Cancelled"})
 # Only after internal work is done: ticket should be waiting on the customer (not Open / In Progress / etc.).
-_STATUSES_ELIGIBLE_FOR_CUSTOMER_CONFIRMATION_REQUEST = frozenset({"Waiting for Customer"})
+_STATUSES_ELIGIBLE_FOR_CUSTOMER_CONFIRMATION_REQUEST = frozenset(
+	{"Waiting for Customer", "Resolved", "In Progress", "Assigned", "Waiting for Technician", "Open"}
+)
 
 _SUPPORT_TASK_STATUSES = (
 	"Open",
@@ -853,6 +1421,56 @@ _CUSTOMER_VISIBLE_TASK_STATUSES = frozenset(
 		"Completed",
 	}
 )
+
+
+def _apply_support_ticket_status_via_portal(ticket_name: str, new_status: str, user: str) -> None:
+	"""Set Support Ticket status (with workflow routing fields) and append a portal system comment.
+
+	Must keep ``action_required_from`` / ``current_owner_type`` aligned with ``status`` or
+	:func:`validate_workflow_consistency` rejects the save.
+
+	Caller must enforce permissions. Skips when ``new_status`` already matches ``status``.
+	"""
+	from printechs_support.printechs_support_system.api.ticket_workflow import (
+		derive_workflow_routing_for_status,
+		sync_waiting_side_fields,
+	)
+
+	new_status = (new_status or "").strip()
+	if not new_status:
+		return
+
+	doc = frappe.get_doc("Support Ticket", ticket_name)
+	old = doc.status or ""
+	if old == new_status:
+		return
+
+	ar, cot = derive_workflow_routing_for_status(new_status)
+	doc.status = new_status
+	doc.action_required_from = ar
+	doc.current_owner_type = cot
+	if new_status in _TERMINAL_TICKET_STATUSES:
+		doc.customer_resolution_deadline = None
+		doc.customer_confirmation_required = 0
+
+	sync_waiting_side_fields(doc)
+	doc.flags.workflow_transition = True
+	try:
+		doc.append(
+			"comments",
+			{
+				"comment_type": "System Update",
+				"comment_by": user,
+				"comment_on": frappe.utils.now(),
+				"is_customer_visible": 1,
+				"content": sanitize_html(
+					f"<p><strong>Status</strong> updated from <em>{html_escape(old)}</em> to <em>{html_escape(new_status)}</em></p>"
+				),
+			},
+		)
+		doc.save(ignore_permissions=True)
+	finally:
+		doc.flags.workflow_transition = False
 
 
 def _get_portal_doc(doctype: str, name: str):
@@ -891,7 +1509,24 @@ def _validate_portal_comment_attachment(file_name: str, ticket_name: str) -> Non
 		frappe.throw(_("Invalid attachment"), frappe.ValidationError)
 
 
-def _serialize_comment_row(row: dict) -> dict:
+def _validate_portal_task_comment_attachment(file_name: str, task_name: str) -> None:
+	"""Ensure File row exists and is attached to this Support Task (from portal_upload_task_file)."""
+	file_name = (file_name or "").strip()
+	if not file_name:
+		return
+	row = frappe.db.get_value(
+		"File",
+		file_name,
+		["name", "attached_to_doctype", "attached_to_name", "is_folder"],
+		as_dict=True,
+	)
+	if not row or row.get("is_folder"):
+		frappe.throw(_("Invalid attachment"), frappe.ValidationError)
+	if row.get("attached_to_doctype") != "Support Task" or row.get("attached_to_name") != task_name:
+		frappe.throw(_("Invalid attachment"), frappe.ValidationError)
+
+
+def _serialize_comment_row(row: dict, **extras) -> dict:
 	by = row.get("comment_by") or ""
 	full = frappe.db.get_value("User", by, "full_name") if by else ""
 	att = row.get("attachment")
@@ -903,7 +1538,7 @@ def _serialize_comment_row(row: dict) -> dict:
 	content = row.get("content") or ""
 	content = sanitize_html(content) if content else ""
 	reply_to = (row.get("in_reply_to") or "").strip() or None
-	return {
+	out = {
 		"name": row.get("name"),
 		"comment_type": row.get("comment_type"),
 		"comment_by": by,
@@ -916,11 +1551,28 @@ def _serialize_comment_row(row: dict) -> dict:
 		"attachment_url": att_url,
 		"internal_only": not int(row.get("is_customer_visible") or 0),
 	}
+	out.update(extras)
+	return out
+
+
+def _portal_comment_sort_key(row: dict):
+	"""Stable chronological sort for merged ticket + task threads."""
+	co = row.get("comment_on")
+	try:
+		d = get_datetime(co) if co else None
+	except Exception:
+		d = None
+	ts = d.timestamp() if d else 0.0
+	return (ts, row.get("name") or "")
 
 
 @frappe.whitelist()
 def get_portal_ticket_comments(ticket_name: str):
-	"""Comments on the ticket (child table). Customer portal users only see customer-visible rows."""
+	"""Comments on the ticket plus comments on linked Support Tasks (merged, chronological).
+
+	Task rows include ``thread_scope``, ``task_name``, and ``task_subject`` so the portal can label them.
+	Reply targets remain within each document type (ticket replies use Support Ticket Comment names only).
+	"""
 	user = frappe.session.user
 	if user == "Guest":
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
@@ -957,7 +1609,52 @@ def get_portal_ticket_comments(ticket_name: str):
 		limit_page_length=500,
 	)
 
-	return [_serialize_comment_row(r) for r in rows]
+	out = [_serialize_comment_row(r, thread_scope="ticket") for r in rows]
+
+	task_names = frappe.get_all(
+		"Support Task",
+		filters={"support_ticket": ticket_name},
+		pluck="name",
+		order_by="creation asc",
+		limit_page_length=500,
+	)
+	for tn in task_names:
+		subject = frappe.db.get_value("Support Task", tn, "subject") or tn
+		tf = {
+			"parent": tn,
+			"parenttype": "Support Task",
+			"parentfield": "comments",
+		}
+		if not internal:
+			tf["is_customer_visible"] = 1
+		task_rows = frappe.get_all(
+			"Support Task Comment",
+			filters=tf,
+			fields=[
+				"name",
+				"comment_type",
+				"comment_by",
+				"comment_on",
+				"is_customer_visible",
+				"content",
+				"in_reply_to",
+				"attachment",
+			],
+			order_by="comment_on asc, creation asc",
+			limit_page_length=500,
+		)
+		for r in task_rows:
+			out.append(
+				_serialize_comment_row(
+					r,
+					thread_scope="task",
+					task_name=tn,
+					task_subject=subject,
+				)
+			)
+
+	out.sort(key=_portal_comment_sort_key)
+	return out
 
 
 @frappe.whitelist()
@@ -1000,11 +1697,35 @@ def get_portal_ticket_desk_history(ticket_name: str, limit: int = 50):
 
 
 @frappe.whitelist()
-def add_portal_ticket_comment(ticket_name: str, content: str, is_internal_note=None, in_reply_to=None, attachment=None):
+def add_portal_ticket_comment(
+	ticket_name: str,
+	content: str,
+	is_internal_note=None,
+	in_reply_to=None,
+	attachment=None,
+	set_status=None,
+	reply_mode=None,
+	technician_reply_effect=None,
+):
 	"""Append a Support Ticket Comment row. Internal notes only for internal portal users.
 
 	``in_reply_to``: optional name of another comment row on the same ticket (threaded reply).
 	``attachment``: optional File name (from :func:`portal_upload_ticket_file`) linked to this ticket.
+	``set_status``: optional target Support Ticket status (internal users only), applied after the comment.
+	``reply_mode``: for **customer-visible** replies while status is **Waiting for Customer** (see handoff below):
+	  - omit or ``provide_information`` — run smart workflow so status becomes **Waiting for Technician**.
+	  - ``acknowledgement_only`` — thread message only (no handoff); use for courtesy / “I'll check” notes.
+
+	**Handoff who-qualifies:** same as desk “customer” workflow actions—anyone who may represent the
+	ticket’s customer (typical portal user, or an internal user also linked to that customer), not
+	“non-internal sessions only” (so mixed staff/customer roles are not stuck on this status).
+
+	``technician_reply_effect`` (internal users, **customer-visible** reply only; ignored if
+	``set_status`` is passed): drives smart workflow before the comment is saved —
+	``normal_reply`` → work update (:func:`ticket_workflow.technician_send_work_update`), not applied
+	when status is already *Waiting for Customer* (comment-only; use expect-customer instead);
+	``expect_customer_response`` → *Waiting for Customer*
+	(:func:`ticket_workflow.technician_request_customer_input`).
 	"""
 	user = frappe.session.user
 	if user == "Guest":
@@ -1015,6 +1736,7 @@ def add_portal_ticket_comment(ticket_name: str, content: str, is_internal_note=N
 		frappe.throw(_("Not found"), frappe.DoesNotExistError)
 
 	_assert_portal_ticket_access(user, ticket_name)
+	_assert_ticket_communication_allowed(ticket_name)
 
 	internal = user_sees_all_support_records(user)
 	want_internal = bool(cint(is_internal_note))
@@ -1052,7 +1774,344 @@ def add_portal_ticket_comment(ticket_name: str, content: str, is_internal_note=N
 	else:
 		safe = _clean_portal_comment_html(content)
 
+	ss_early = (set_status or "").strip()
+	skip_customer_wfc_for_staff_intent = False
+	staff_reply_intent_value = ""
+
+	# Internal staff: optional smart workflow when posting a customer-visible reply (portal intent).
+	if internal and visible and not ss_early:
+		tr = (technician_reply_effect or "").strip().lower().replace("-", "_")
+		if tr in ("normal_reply", "expect_customer_response"):
+			from printechs_support.printechs_support_system.api import ticket_workflow as tw
+
+			skip_customer_wfc_for_staff_intent = True
+			cur_for_staff = (frappe.db.get_value("Support Ticket", ticket_name, "status") or "").strip()
+			if cur_for_staff not in ("Closed", "Cancelled"):
+				plain_staff = (strip_html(safe) or "").strip() or (
+					_("Shared an attachment.") if att_name else _("(message)")
+				)
+				if tr == "expect_customer_response":
+					staff_reply_intent_value = "Expect Customer Response"
+					tw.technician_request_customer_input(ticket_name, plain_staff, user=user)
+				elif tr == "normal_reply":
+					staff_reply_intent_value = "Normal Reply"
+					if cur_for_staff != "Waiting for Customer":
+						tw.technician_send_work_update(ticket_name, plain_staff, user=user)
+					# Waiting for Customer + “normal”: do not call work_update (would break routing).
+
+	# While “Waiting for Customer”, a **customer-visible** reply can hand the ticket back to support.
+	# Use the same “is this user the customer for this ticket?” rule as desk workflow (not ``not internal``),
+	# so staff with both internal + customer roles, and agreement-linked contacts, are not stuck.
+	if visible and not skip_customer_wfc_for_staff_intent:
+		cur_st = frappe.db.get_value("Support Ticket", ticket_name, "status")
+		if (cur_st or "").strip() == "Waiting for Customer":
+			from printechs_support.printechs_support_system.api.ticket_workflow import (
+				_assert_customer,
+				customer_informational_reply,
+				customer_provide_requested_information,
+			)
+
+			doc_gate = frappe.get_cached_doc("Support Ticket", ticket_name)
+			try:
+				_assert_customer(doc_gate, user)
+			except (frappe.PermissionError, frappe.ValidationError):
+				pass
+			else:
+				mode = (reply_mode or "").strip().lower().replace("-", "_")
+				plain = (strip_html(safe) or "").strip() or (
+					_("Shared an attachment.") if att_name else _("(message)")
+				)
+				if mode in ("acknowledgement_only", "acknowledgement", "informational"):
+					customer_informational_reply(ticket_name, plain, user=user)
+				else:
+					customer_provide_requested_information(ticket_name, plain, user=user)
+
 	doc = _get_portal_doc("Support Ticket", ticket_name)
+	row_data = {
+		"comment_type": comment_type,
+		"comment_by": user,
+		"comment_on": frappe.utils.now(),
+		"is_customer_visible": visible,
+		"content": safe,
+	}
+	if staff_reply_intent_value:
+		row_data["staff_reply_intent"] = staff_reply_intent_value
+	if reply_to_name and reply_row:
+		row_data["in_reply_to"] = reply_to_name
+	if att_name:
+		row_data["attachment"] = att_name
+	doc.append(
+		"comments",
+		row_data,
+	)
+	# Child-table diff is often missing in on_update's get_doc_before_save(); notify after save instead.
+	doc.flags.skip_comment_notification_hook = True
+	doc.save(ignore_permissions=True)
+
+	frappe.db.set_value(
+		"Support Ticket",
+		ticket_name,
+		"last_customer_update_on" if visible else "last_internal_update_on",
+		frappe.utils.now(),
+	)
+
+	from printechs_support.printechs_support_system.api.ticket_comment_emails import notify_ticket_comment
+
+	try:
+		notify_ticket_comment(
+			ticket_name,
+			comment_type=comment_type,
+			comment_by=user,
+			content_html=safe,
+			is_internal_note=not bool(visible),
+			author_is_internal=internal,
+		)
+	except Exception:
+		frappe.log_error(frappe.get_traceback(), "portal add_portal_ticket_comment notify")
+
+	ss = ss_early or (set_status or "").strip()
+	if ss:
+		if not internal:
+			frappe.throw(_("Not permitted"), frappe.PermissionError)
+		if ss not in _SUPPORT_TICKET_STATUSES:
+			frappe.throw(_("Invalid status"), frappe.ValidationError)
+		_apply_support_ticket_status_via_portal(ticket_name, ss, user)
+
+	cur_status = frappe.db.get_value("Support Ticket", ticket_name, "status")
+	return {"ok": True, "ticket_status": cur_status}
+
+
+@frappe.whitelist()
+def portal_ticket_workflow_action(
+	action: str,
+	ticket_name: str,
+	message: str | None = None,
+	technician_user: str | None = None,
+	due_date=None,
+	note: str | None = None,
+	reopen_from_resolved: int | None = None,
+	reason: str | None = None,
+):
+	"""Execute a structured workflow step from the portal (dispatches :mod:`ticket_workflow`)."""
+	from printechs_support.printechs_support_system.api import ticket_workflow as tw
+
+	user = frappe.session.user
+	if user == "Guest":
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+	action = (action or "").strip()
+	ticket_name = (ticket_name or "").strip()
+	if not ticket_name or not frappe.db.exists("Support Ticket", ticket_name):
+		frappe.throw(_("Not found"), frappe.DoesNotExistError)
+	_assert_portal_ticket_access(user, ticket_name)
+
+	internal = user_sees_all_support_records(user)
+
+	def _need_msg() -> str:
+		m = (message or "").strip()
+		if not m:
+			frappe.throw(_("Message is required."), frappe.ValidationError)
+		return m
+
+	if action == "assign_ticket":
+		if not internal:
+			frappe.throw(_("Not permitted"), frappe.PermissionError)
+		tu = (technician_user or "").strip()
+		if not tu:
+			frappe.throw(_("Technician user is required."), frappe.ValidationError)
+		return tw.assign_ticket(ticket_name, tu, due_date=due_date, note=note or message)
+
+	if action == "technician_ack":
+		return tw.technician_send_acknowledgement(ticket_name, _need_msg())
+
+	if action == "start_work":
+		return tw.technician_start_work(ticket_name, message=message)
+
+	if action == "request_customer_input":
+		return tw.technician_request_customer_input(ticket_name, _need_msg())
+
+	if action == "customer_ack":
+		return tw.customer_acknowledgement(ticket_name, _need_msg())
+
+	if action == "customer_info_reply":
+		return tw.customer_informational_reply(ticket_name, _need_msg())
+
+	if action == "customer_provide_info":
+		return tw.customer_provide_requested_information(ticket_name, _need_msg())
+
+	if action == "customer_followup":
+		return tw.customer_followup_question(
+			ticket_name,
+			_need_msg(),
+			reopen_from_resolved=bool(int(reopen_from_resolved or 0)),
+		)
+
+	if action == "resume_work":
+		return tw.technician_resume_after_customer_reply(ticket_name, message=message)
+
+	if action == "work_update":
+		return tw.technician_send_work_update(ticket_name, _need_msg())
+
+	if action == "send_resolution":
+		return tw.technician_send_resolution(ticket_name, _need_msg())
+
+	if action == "customer_confirm":
+		return tw.customer_confirm_resolved(ticket_name, message=message)
+
+	if action == "customer_reopen":
+		return tw.customer_reopen_issue(ticket_name, _need_msg())
+
+	if action == "internal_note":
+		return tw.technician_internal_note(ticket_name, _need_msg())
+
+	if action == "manager_close":
+		return tw.manager_close_ticket(ticket_name, message=message)
+
+	if action == "cancel_ticket":
+		if not internal:
+			frappe.throw(_("Not permitted"), frappe.PermissionError)
+		return tw.cancel_ticket(ticket_name, reason=reason or message)
+
+	frappe.throw(_("Unknown workflow action."), frappe.ValidationError)
+
+
+@frappe.whitelist()
+def get_portal_ticket_workflow_log(ticket_name: str):
+	"""Timeline rows from Support Ticket Workflow Log (hides internal rows from customers)."""
+	user = frappe.session.user
+	if user == "Guest":
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+	ticket_name = (ticket_name or "").strip()
+	if not ticket_name or not frappe.db.exists("Support Ticket", ticket_name):
+		frappe.throw(_("Not found"), frappe.DoesNotExistError)
+	_assert_portal_ticket_access(user, ticket_name)
+	internal = user_sees_all_support_records(user)
+	doc = frappe.get_doc("Support Ticket", ticket_name)
+	entries = []
+	for row in doc.workflow_log or []:
+		if int(row.is_internal or 0) and not internal:
+			continue
+		entries.append(
+			{
+				"name": row.name,
+				"posted_by": row.posted_by,
+				"posted_by_role_type": row.posted_by_role_type,
+				"reply_type": row.reply_type,
+				"subject": row.subject or "",
+				"message": row.message or "",
+				"previous_status": row.previous_status or "",
+				"new_status": row.new_status or "",
+				"previous_action_required_from": row.previous_action_required_from or "",
+				"new_action_required_from": row.new_action_required_from or "",
+				"created_on": str(row.created_on) if row.created_on else None,
+				"attachment": row.attachment or "",
+			}
+		)
+	return {"entries": entries}
+
+
+@frappe.whitelist()
+def get_portal_task_comments(task_name: str):
+	"""Threaded comments on a Support Task (child table). Customer portal users only see customer-visible rows."""
+	user = frappe.session.user
+	if user == "Guest":
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+	task_name = (task_name or "").strip()
+	if not task_name or not frappe.db.exists("Support Task", task_name):
+		frappe.throw(_("Not found"), frappe.DoesNotExistError)
+
+	_assert_portal_task_access(user, task_name)
+
+	internal = user_sees_all_support_records(user)
+	filters = {
+		"parent": task_name,
+		"parenttype": "Support Task",
+		"parentfield": "comments",
+	}
+	if not internal:
+		filters["is_customer_visible"] = 1
+
+	rows = frappe.get_all(
+		"Support Task Comment",
+		filters=filters,
+		fields=[
+			"name",
+			"comment_type",
+			"comment_by",
+			"comment_on",
+			"is_customer_visible",
+			"content",
+			"in_reply_to",
+			"attachment",
+		],
+		order_by="comment_on asc, creation asc",
+		limit_page_length=500,
+	)
+
+	return [_serialize_comment_row(r) for r in rows]
+
+
+@frappe.whitelist()
+def add_portal_task_comment(
+	task_name: str,
+	content: str,
+	is_internal_note=None,
+	in_reply_to=None,
+	attachment=None,
+	set_status=None,
+):
+	"""Append a Support Task Comment row. Same behaviour as ticket comments (internal notes, replies, attachments).
+
+	``set_status``: optional Support Task status (internal users only), applied after the comment.
+	"""
+	user = frappe.session.user
+	if user == "Guest":
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+	task_name = (task_name or "").strip()
+	if not task_name or not frappe.db.exists("Support Task", task_name):
+		frappe.throw(_("Not found"), frappe.DoesNotExistError)
+
+	_assert_portal_task_access(user, task_name)
+	_assert_task_communication_allowed(task_name)
+
+	internal = user_sees_all_support_records(user)
+	want_internal = bool(cint(is_internal_note))
+	if want_internal and not internal:
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+	if internal and want_internal:
+		comment_type = "Internal Note"
+		visible = 0
+	else:
+		comment_type = "Customer Reply"
+		visible = 1
+
+	reply_to_name = (in_reply_to or "").strip()
+	reply_row = None
+	if reply_to_name:
+		reply_row = frappe.db.get_value(
+			"Support Task Comment",
+			{"name": reply_to_name, "parent": task_name, "parenttype": "Support Task"},
+			["name", "is_customer_visible"],
+			as_dict=True,
+		)
+		if not reply_row:
+			frappe.throw(_("Invalid reply target"), frappe.ValidationError)
+		if not internal and not int(reply_row.get("is_customer_visible") or 0):
+			frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+	att_name = (attachment or "").strip()
+	if att_name:
+		_validate_portal_task_comment_attachment(att_name, task_name)
+
+	has_text = bool(content and str(content).strip())
+	if att_name and not has_text:
+		safe = "<p>Shared an attachment.</p>"
+	else:
+		safe = _clean_portal_comment_html(content)
+
+	doc = _get_portal_doc("Support Task", task_name)
 	row_data = {
 		"comment_type": comment_type,
 		"comment_by": user,
@@ -1070,14 +2129,181 @@ def add_portal_ticket_comment(ticket_name: str, content: str, is_internal_note=N
 	)
 	doc.save(ignore_permissions=True)
 
-	frappe.db.set_value(
-		"Support Ticket",
-		ticket_name,
-		"last_customer_update_on" if visible else "last_internal_update_on",
-		frappe.utils.now(),
-	)
+	ts = (set_status or "").strip()
+	if ts:
+		if not internal:
+			frappe.throw(_("Not permitted"), frappe.PermissionError)
+		if ts not in _SUPPORT_TASK_STATUSES:
+			frappe.throw(_("Invalid status"), frappe.ValidationError)
+		prev = frappe.flags.ignore_permissions
+		frappe.flags.ignore_permissions = True
+		try:
+			frappe.db.set_value("Support Task", task_name, "status", ts)
+		finally:
+			frappe.flags.ignore_permissions = prev
 
-	return {"ok": True}
+	cur_task = frappe.db.get_value("Support Task", task_name, "status")
+	return {"ok": True, "task_status": cur_task}
+
+
+@frappe.whitelist()
+def update_portal_ticket(
+	ticket_name: str,
+	subject: str | None = None,
+	description: str | None = None,
+	priority: str | None = None,
+):
+	"""Update editable fields on a Support Ticket from the portal.
+
+	Internal users may change subject, description, and priority. Portal customers may change
+	description only (use status / due-date RPCs for other changes).
+
+	Call with ``ticket_name`` only to verify the method exists (capability probe).
+	"""
+	user = frappe.session.user
+	if user == "Guest":
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+	if not user_can_access_support_portal(user):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+	ticket_name = (ticket_name or "").strip()
+	if not ticket_name or not frappe.db.exists("Support Ticket", ticket_name):
+		frappe.throw(_("Not found"), frappe.DoesNotExistError)
+
+	_assert_portal_ticket_access(user, ticket_name)
+	internal = user_sees_all_support_records(user)
+
+	has_subject = subject is not None
+	has_description = description is not None
+	has_priority = priority is not None
+
+	if not (has_subject or has_description or has_priority):
+		return {"ok": True}
+
+	if not internal and (has_subject or has_priority):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+	if has_subject or has_description:
+		_assert_ticket_communication_allowed(ticket_name)
+
+	doc = frappe.get_doc("Support Ticket", ticket_name)
+	changed = False
+
+	if has_subject:
+		s = (subject or "").strip()
+		if not s:
+			frappe.throw(_("Subject is required"), frappe.ValidationError)
+		if doc.subject != s:
+			doc.subject = s
+			changed = True
+
+	if has_description:
+		raw = str(description).strip() if description is not None else ""
+		desc = sanitize_html(raw) if raw else ""
+		if not strip_html(desc).strip():
+			desc = ""
+		if doc.description != desc:
+			doc.description = desc
+			changed = True
+
+	if has_priority:
+		p = (priority or "").strip()
+		if p not in _VALID_CREATE_PRIORITIES:
+			frappe.throw(_("Invalid priority"), frappe.ValidationError)
+		if doc.priority != p:
+			doc.priority = p
+			doc.flags.priority_from_portal = 1
+			changed = True
+
+	if changed:
+		doc.save(ignore_permissions=True)
+
+	return {
+		"ok": True,
+		"name": doc.name,
+		"subject": doc.subject,
+		"status": doc.status,
+		"priority": doc.priority,
+	}
+
+
+@frappe.whitelist()
+def update_portal_task(
+	task_name: str,
+	subject: str | None = None,
+	description: str | None = None,
+):
+	"""Update editable fields on a Support Task from the portal.
+
+	Internal users may change subject and description. Portal customers (tasks linked to a ticket they
+	can see) may change **description** only. When the linked ticket is resolved/closed, communication
+	is locked (same as ticket comments). Standalone internal tasks (no ticket): internal team only.
+
+	Call with ``task_name`` only to verify the method exists (capability probe).
+	"""
+	user = frappe.session.user
+	if user == "Guest":
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+	if not user_can_access_support_portal(user):
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+	task_name = (task_name or "").strip()
+	if not task_name or not frappe.db.exists("Support Task", task_name):
+		frappe.throw(_("Not found"), frappe.DoesNotExistError)
+
+	_assert_portal_task_access(user, task_name)
+	internal = user_sees_all_support_records(user)
+
+	has_subject = subject is not None
+	has_description = description is not None
+
+	if not (has_subject or has_description):
+		return {"ok": True}
+
+	if not internal and has_subject:
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+	ticket_name = frappe.db.get_value("Support Task", task_name, "support_ticket")
+	if ticket_name and (has_subject or has_description):
+		_assert_ticket_communication_allowed(ticket_name)
+	elif not ticket_name and not internal:
+		frappe.throw(_("Not permitted"), frappe.PermissionError)
+
+	doc = frappe.get_doc("Support Task", task_name)
+	changed = False
+
+	if has_subject:
+		s = (subject or "").strip()
+		if not s:
+			frappe.throw(_("Subject is required"), frappe.ValidationError)
+		if doc.subject != s:
+			doc.subject = s
+			changed = True
+
+	if has_description:
+		raw = str(description).strip() if description is not None else ""
+		if raw:
+			if "<" in raw:
+				desc_val = sanitize_html(raw)
+				if not strip_html(desc_val).strip():
+					desc_val = ""
+			else:
+				desc_val = f"<p>{html_escape(raw).replace(chr(10), '<br>')}</p>"
+		else:
+			desc_val = ""
+		if doc.description != desc_val:
+			doc.description = desc_val
+			changed = True
+
+	if changed:
+		doc.save(ignore_permissions=True)
+
+	return {
+		"ok": True,
+		"name": doc.name,
+		"subject": doc.subject,
+		"status": doc.status,
+	}
 
 
 @frappe.whitelist()
@@ -1122,26 +2348,7 @@ def update_portal_ticket_status(ticket_name: str, status: str):
 	# Workflow validates transitions by user role (see get_transitions). Portal users often lack
 	# the workflow "allowed" role even when the API permits the target status. Set status via DB
 	# (no workflow), then save only the new comment row so validate_workflow sees no transition.
-	update_fields = {"status": status}
-	if status in _TERMINAL_TICKET_STATUSES:
-		update_fields["customer_resolution_deadline"] = None
-		update_fields["customer_confirmation_required"] = 0
-
-	frappe.db.set_value("Support Ticket", ticket_name, update_fields)
-	doc = frappe.get_doc("Support Ticket", ticket_name)
-	doc.append(
-		"comments",
-		{
-			"comment_type": "System Update",
-			"comment_by": user,
-			"comment_on": frappe.utils.now(),
-			"is_customer_visible": 1,
-			"content": sanitize_html(
-				f"<p><strong>Status</strong> updated from <em>{html_escape(old)}</em> to <em>{html_escape(status)}</em></p>"
-			),
-		},
-	)
-	doc.save(ignore_permissions=True)
+	_apply_support_ticket_status_via_portal(ticket_name, status, user)
 	return {"ok": True, "status": status}
 
 
@@ -1202,7 +2409,8 @@ def update_portal_task_due_date(task_name: str, due_date: str | None = None):
 		doc.flags.ignore_permissions = True
 		doc.save()
 		out = doc.due_date
-		return {"ok": True, "due_date": str(out) if out else None}
+		out_s, out_cal = _portal_due_datetime_wire(out)
+		return {"ok": True, "due_date": out_s, "due_date_calendar": out_cal}
 	finally:
 		frappe.flags.ignore_permissions = prev
 
@@ -1239,7 +2447,8 @@ def update_portal_ticket_due_date(ticket_name: str, due_date: str | None = None)
 		doc.flags.ignore_permissions = True
 		doc.save()
 		out = doc.due_date
-		return {"ok": True, "due_date": str(out) if out else None}
+		out_s, out_cal = _portal_due_datetime_wire(out)
+		return {"ok": True, "due_date": out_s, "due_date_calendar": out_cal}
 	finally:
 		frappe.flags.ignore_permissions = prev
 
@@ -1308,11 +2517,18 @@ def update_portal_ticket_assignment(ticket_name: str, team: str | None = None, a
 			"team": doc.team or "",
 			"assigned_to": doc.assigned_to or "",
 			"assigned_users": users,
+			"status": doc.status or "",
 		}
 
 	doc.save(ignore_permissions=True)
 	users = _assignee_users_by_parent("Support Ticket Assignee", [ticket_name]).get(ticket_name, [])
-	return {"ok": True, "team": doc.team or "", "assigned_to": doc.assigned_to or "", "assigned_users": users}
+	return {
+		"ok": True,
+		"team": doc.team or "",
+		"assigned_to": doc.assigned_to or "",
+		"assigned_users": users,
+		"status": doc.status or "",
+	}
 
 
 @frappe.whitelist()
@@ -1419,6 +2635,7 @@ def portal_upload_ticket_file():
 	if not ticket_name or not frappe.db.exists("Support Ticket", ticket_name):
 		frappe.throw(_("Not found"), frappe.DoesNotExistError)
 	_assert_portal_ticket_access(user, ticket_name)
+	_assert_ticket_communication_allowed(ticket_name)
 
 	if not frappe.request or not frappe.request.files:
 		frappe.throw(_("No file"), frappe.ValidationError)
@@ -1458,6 +2675,7 @@ def portal_upload_task_file():
 	if not task_name or not frappe.db.exists("Support Task", task_name):
 		frappe.throw(_("Not found"), frappe.DoesNotExistError)
 	_assert_portal_task_access(user, task_name)
+	_assert_task_communication_allowed(task_name)
 
 	if not frappe.request or not frappe.request.files:
 		frappe.throw(_("No file"), frappe.ValidationError)

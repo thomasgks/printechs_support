@@ -1,0 +1,62 @@
+{
+ "actions": [],
+ "allow_import": 1,
+ "allow_rename": 1,
+ "autoname": "field:reason_name",
+ "creation": "2026-04-06 00:00:00.000000",
+ "doctype": "DocType",
+ "document_type": "Setup",
+ "engine": "InnoDB",
+ "field_order": [
+  "reason_name",
+  "reason_type",
+  "description",
+  "is_active"
+ ],
+ "fields": [
+  {
+   "fieldname": "reason_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Reason Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "reason_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Reason Type",
+   "options": "Printechs Delay\nCustomer Delay\nThird Party Delay\nShared Delay",
+   "reqd": 1
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Description"
+  },
+  {
+   "default": "1",
+   "fieldname": "is_active",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Is Active"
+  }
+ ],
+ "links": [],
+ "modified": "2026-04-06 00:00:00.000000",
+ "module": "Printechs Support System",
+ "name": "Delay Reason",
+ "owner": "Administrator",
+ "permissions": [
+  {"create": 1, "delete": 1, "email": 1, "export": 1, "print": 1, "read": 1, "report": 1, "role": "System Manager", "share": 1, "write": 1},
+  {"create": 1, "delete": 1, "email": 1, "export": 1, "print": 1, "read": 1, "report": 1, "role": "Support Team", "share": 1, "write": 1}
+ ],
+ "search_fields": "reason_name",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "title_field": "reason_name",
+ "track_changes": 1
+}

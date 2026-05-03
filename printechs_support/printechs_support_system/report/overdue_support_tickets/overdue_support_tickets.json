@@ -1,0 +1,35 @@
+{
+ "add_total_row": 0,
+ "columns": [],
+ "creation": "2026-04-06 00:00:00.000000",
+ "disabled": 0,
+ "docstatus": 0,
+ "doctype": "Report",
+ "filters": [],
+ "idx": 0,
+ "is_standard": "Yes",
+ "modified": "2026-04-06 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Printechs Support System",
+ "name": "Overdue Support Tickets",
+ "owner": "Administrator",
+ "prepared_report": 0,
+ "query": "SELECT\n\t`tabSupport Ticket`.name AS `Ticket:Link/Support Ticket:160`,\n\t`tabSupport Ticket`.subject AS `Subject:Data:200`,\n\t`tabSupport Ticket`.customer AS `Customer:Link/Customer:140`,\n\t`tabSupport Ticket`.status AS `Status:Data:120`,\n\t`tabSupport Ticket`.resolution_due AS `Resolution Due:Datetime:160`,\n\t`tabSupport Ticket`.is_overdue AS `Overdue:Check:80`\nFROM `tabSupport Ticket`\nWHERE `tabSupport Ticket`.is_overdue = 1\n\tAND `tabSupport Ticket`.status NOT IN ('Resolved', 'Closed', 'Cancelled')\nORDER BY `tabSupport Ticket`.resolution_due ASC\nLIMIT 500",
+ "ref_doctype": "Support Ticket",
+ "report_name": "Overdue Support Tickets",
+ "report_type": "Query Report",
+ "roles": [
+  {
+   "role": "Printechs Support Coordinator"
+  },
+  {
+   "role": "Printechs Support Engineer"
+  },
+  {
+   "role": "Printechs Support Project Manager"
+  },
+  {
+   "role": "System Manager"
+  }
+ ]
+}

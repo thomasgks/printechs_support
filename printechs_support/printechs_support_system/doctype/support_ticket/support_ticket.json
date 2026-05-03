@@ -1,0 +1,721 @@
+{
+ "actions": [],
+ "allow_import": 1,
+ "autoname": "naming_series:",
+ "creation": "2026-04-06 00:00:00.000000",
+ "doctype": "DocType",
+ "document_type": "Document",
+ "email_append_to": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "section_main",
+  "naming_series",
+  "work_scope",
+  "subject",
+  "customer",
+  "customer_name",
+  "support_agreement",
+  "column_break_1",
+  "division",
+  "agreement_type",
+  "channel",
+  "ticket_type",
+  "priority",
+  "status",
+  "section_workflow",
+  "action_required_from",
+  "current_owner_type",
+  "pending_reason",
+  "column_break_wf",
+  "last_technician_reply_on",
+  "last_customer_reply_on",
+  "section_workflow_timeline",
+  "workflow_log",
+  "section_dates",
+  "opening_date",
+  "due_date",
+  "column_break_d",
+  "contact_person",
+  "contact_email",
+  "contact_mobile",
+  "section_detail",
+  "project",
+  "software_product",
+  "environment_type",
+  "module_name",
+  "version_no",
+  "column_break_ctx",
+  "reference_document_type",
+  "reference_document_name",
+  "coverage_type",
+  "service_category",
+  "section_flags",
+  "is_under_contract",
+  "under_amc",
+  "is_billable",
+  "requires_approval",
+  "quotation_required",
+  "column_break_f",
+  "quotation",
+  "section_assign",
+  "assigned_to",
+  "ticket_assignees",
+  "assigned_by",
+  "assigned_on",
+  "column_break_a",
+  "team",
+  "escalation_level",
+  "section_sla",
+  "first_response_due",
+  "resolution_due",
+  "column_break_sla",
+  "first_response_on",
+  "resolved_on",
+  "closed_on",
+  "section_metrics",
+  "is_overdue",
+  "response_time_in_minutes",
+  "resolution_time_in_minutes",
+  "customer_approach_count",
+  "column_break_m",
+  "section_delay",
+  "delay_owner",
+  "delay_reason",
+  "delay_remarks",
+  "waiting_for_side",
+  "waiting_since",
+  "total_waiting_time_hours",
+  "section_resolution",
+  "root_cause",
+  "resolution_summary",
+  "resolution_type",
+  "customer_confirmation_required",
+  "customer_resolution_deadline",
+  "column_break_r",
+  "customer_rating",
+  "customer_feedback",
+  "is_reopened",
+  "reopened_count",
+  "section_updates",
+  "source_email_id",
+  "last_customer_update_on",
+  "last_internal_update_on",
+  "section_body",
+  "description",
+  "section_comments",
+  "comments"
+ ],
+ "fields": [
+  {
+   "fieldname": "section_main",
+   "fieldtype": "Section Break",
+   "label": "Main"
+  },
+  {
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Series",
+   "options": "SUP-TKT-.YYYY.-.#####",
+   "reqd": 1,
+   "no_copy": 1,
+   "set_only_once": 1,
+   "print_hide": 1
+  },
+  {
+   "default": "Customer",
+   "description": "Customer = normal support under a client / agreement. Internal = work for your own team (e.g. internal server install, presales demo visit) without a contract customer.",
+   "fieldname": "work_scope",
+   "fieldtype": "Select",
+   "in_standard_filter": 1,
+   "label": "Work scope",
+   "options": "Customer\nInternal"
+  },
+  {
+   "fieldname": "subject",
+   "fieldtype": "Data",
+   "label": "Subject",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "depends_on": "eval:doc.work_scope=='Customer'",
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "label": "Customer",
+   "mandatory_depends_on": "eval:doc.work_scope=='Customer'",
+   "options": "Customer",
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "depends_on": "eval:doc.work_scope=='Customer'",
+   "fieldname": "customer_name",
+   "fieldtype": "Data",
+   "label": "Customer Name",
+   "read_only": 1,
+   "fetch_from": "customer.customer_name",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "support_agreement",
+   "fieldtype": "Link",
+   "label": "Support Agreement",
+   "options": "Support Agreement",
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "division",
+   "fieldtype": "Select",
+   "label": "Division",
+   "options": "Software\nIndustrial\nRetail",
+   "default": "Software",
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "agreement_type",
+   "fieldtype": "Data",
+   "label": "Agreement Type",
+   "read_only": 1,
+   "fetch_from": "support_agreement.agreement_type"
+  },
+  {
+   "fieldname": "channel",
+   "fieldtype": "Select",
+   "label": "Channel",
+   "options": "Portal\nEmail\nInternal\nMobile",
+   "default": "Internal"
+  },
+  {
+   "fieldname": "ticket_type",
+   "fieldtype": "Link",
+   "label": "Ticket Type",
+   "options": "Support Ticket Type",
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "priority",
+   "fieldtype": "Select",
+   "label": "Priority",
+   "options": "Low\nMedium\nHigh\nCritical",
+   "default": "Medium",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Open\nAssigned\nIn Progress\nWaiting for Customer\nWaiting for Technician\nResolved\nClosed\nCancelled",
+   "default": "Open",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "section_workflow",
+   "fieldtype": "Section Break",
+   "label": "Workflow"
+  },
+  {
+   "fieldname": "action_required_from",
+   "fieldtype": "Select",
+   "label": "Action Required From",
+   "options": "Customer\nTechnician\nManager\nNone",
+   "default": "Manager",
+   "description": "Who must act next for SLA and routing.",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "current_owner_type",
+   "fieldtype": "Select",
+   "label": "Current Owner Type",
+   "options": "Customer\nTechnician\nManager\nNone",
+   "description": "Mailbox / responsibility for delays (aligned with workflow).",
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "pending_reason",
+   "fieldtype": "Small Text",
+   "label": "Pending Reason"
+  },
+  {
+   "fieldname": "column_break_wf",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "last_technician_reply_on",
+   "fieldtype": "Datetime",
+   "label": "Last Technician Reply On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_customer_reply_on",
+   "fieldtype": "Datetime",
+   "label": "Last Customer Reply On",
+   "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "section_workflow_timeline",
+   "fieldtype": "Section Break",
+   "label": "Workflow Timeline"
+  },
+  {
+   "fieldname": "workflow_log",
+   "fieldtype": "Table",
+   "label": "Workflow Log",
+   "options": "Support Ticket Workflow Log",
+   "allow_bulk_edit": 0
+  },
+  {
+   "fieldname": "section_dates",
+   "fieldtype": "Section Break",
+   "label": "Dates"
+  },
+  {
+   "fieldname": "opening_date",
+   "fieldtype": "Datetime",
+   "label": "Opening Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "due_date",
+   "fieldtype": "Datetime",
+   "label": "Due Date"
+  },
+  {
+   "fieldname": "column_break_d",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "contact_person",
+   "fieldtype": "Link",
+   "label": "Contact Person",
+   "options": "Contact"
+  },
+  {
+   "fieldname": "contact_email",
+   "fieldtype": "Data",
+   "label": "Contact Email",
+   "options": "Email"
+  },
+  {
+   "fieldname": "contact_mobile",
+   "fieldtype": "Data",
+   "label": "Contact Mobile"
+  },
+  {
+   "fieldname": "section_detail",
+   "fieldtype": "Section Break",
+   "label": "Context"
+  },
+  {
+   "fieldname": "project",
+   "fieldtype": "Link",
+   "label": "Project",
+   "options": "Project"
+  },
+  {
+   "fieldname": "software_product",
+   "fieldtype": "Link",
+   "label": "Software Product",
+   "options": "Item"
+  },
+  {
+   "fieldname": "environment_type",
+   "fieldtype": "Select",
+   "label": "Environment Type",
+   "options": "Production\nUAT\nTest\nDevelopment"
+  },
+  {
+   "fieldname": "module_name",
+   "fieldtype": "Data",
+   "label": "Module Name"
+  },
+  {
+   "fieldname": "version_no",
+   "fieldtype": "Data",
+   "label": "Version No"
+  },
+  {
+   "fieldname": "column_break_ctx",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "reference_document_type",
+   "fieldtype": "Link",
+   "label": "Reference Document Type",
+   "options": "DocType"
+  },
+  {
+   "fieldname": "reference_document_name",
+   "fieldtype": "Dynamic Link",
+   "label": "Reference Document Name",
+   "options": "reference_document_type"
+  },
+  {
+   "description": "Optional; filtered by Division. Syncs Service Category for agreement SLA matching.",
+   "fieldname": "coverage_type",
+   "fieldtype": "Link",
+   "label": "Coverage Type",
+   "options": "Coverage Type"
+  },
+  {
+   "fieldname": "service_category",
+   "fieldtype": "Data",
+   "label": "Service Category",
+   "description": "Matches Support Agreement coverage (Coverage Type title or legacy text) for SLA override. Set automatically when Coverage Type is chosen."
+  },
+  {
+   "fieldname": "section_flags",
+   "fieldtype": "Section Break",
+   "label": "Contract & Billing"
+  },
+  {
+   "fieldname": "is_under_contract",
+   "fieldtype": "Check",
+   "label": "Is Under Contract",
+   "default": "0"
+  },
+  {
+   "fieldname": "under_amc",
+   "fieldtype": "Check",
+   "label": "Under AMC",
+   "default": "0"
+  },
+  {
+   "fieldname": "is_billable",
+   "fieldtype": "Check",
+   "label": "Is Billable",
+   "default": "0"
+  },
+  {
+   "fieldname": "requires_approval",
+   "fieldtype": "Check",
+   "label": "Requires Approval",
+   "default": "0"
+  },
+  {
+   "fieldname": "quotation_required",
+   "fieldtype": "Check",
+   "label": "Quotation Required",
+   "default": "0"
+  },
+  {
+   "fieldname": "column_break_f",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "quotation",
+   "fieldtype": "Link",
+   "label": "Quotation",
+   "options": "Quotation"
+  },
+  {
+   "fieldname": "section_assign",
+   "fieldtype": "Section Break",
+   "label": "Assignment"
+  },
+  {
+   "description": "Primary owner (auto-synced from Ticket Assignees).",
+   "fieldname": "assigned_to",
+   "fieldtype": "Link",
+   "label": "Assigned To (Primary)",
+   "options": "User"
+  },
+  {
+   "description": "One or more internal owners; mark one as Primary. Primary is mirrored to Assigned To.",
+   "fieldname": "ticket_assignees",
+   "fieldtype": "Table",
+   "label": "Ticket Assignees",
+   "options": "Support Ticket Assignee"
+  },
+  {
+   "fieldname": "assigned_by",
+   "fieldtype": "Link",
+   "label": "Assigned By",
+   "options": "User"
+  },
+  {
+   "fieldname": "assigned_on",
+   "fieldtype": "Datetime",
+   "label": "Assigned On"
+  },
+  {
+   "fieldname": "column_break_a",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "team",
+   "fieldtype": "Link",
+   "label": "Team",
+   "options": "Support Team"
+  },
+  {
+   "fieldname": "escalation_level",
+   "fieldtype": "Int",
+   "label": "Escalation Level",
+   "default": "0"
+  },
+  {
+   "fieldname": "section_sla",
+   "fieldtype": "Section Break",
+   "label": "SLA"
+  },
+  {
+   "fieldname": "first_response_due",
+   "fieldtype": "Datetime",
+   "label": "First Response Due",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "resolution_due",
+   "fieldtype": "Datetime",
+   "label": "Resolution Due",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "column_break_sla",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "first_response_on",
+   "fieldtype": "Datetime",
+   "label": "First Response On"
+  },
+  {
+   "fieldname": "resolved_on",
+   "fieldtype": "Datetime",
+   "label": "Resolved On"
+  },
+  {
+   "fieldname": "closed_on",
+   "fieldtype": "Datetime",
+   "label": "Closed On"
+  },
+  {
+   "fieldname": "section_metrics",
+   "fieldtype": "Section Break",
+   "label": "Metrics"
+  },
+  {
+   "fieldname": "is_overdue",
+   "fieldtype": "Check",
+   "label": "Is Overdue",
+   "read_only": 1,
+   "default": "0"
+  },
+  {
+   "fieldname": "response_time_in_minutes",
+   "fieldtype": "Float",
+   "label": "Response Time in Minutes",
+   "read_only": 1
+  },
+  {
+   "fieldname": "resolution_time_in_minutes",
+   "fieldtype": "Float",
+   "label": "Resolution Time in Minutes",
+   "read_only": 1
+  },
+  {
+   "fieldname": "customer_approach_count",
+   "fieldtype": "Int",
+   "label": "Customer Approach Count",
+   "default": "0"
+  },
+  {
+   "fieldname": "column_break_m",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "section_delay",
+   "fieldtype": "Section Break",
+   "label": "Delay"
+  },
+  {
+   "fieldname": "delay_owner",
+   "fieldtype": "Select",
+   "label": "Delay Owner",
+   "options": "None\nPrintechs\nCustomer\nThird Party\nShared"
+  },
+  {
+   "fieldname": "delay_reason",
+   "fieldtype": "Link",
+   "label": "Delay Reason",
+   "options": "Delay Reason"
+  },
+  {
+   "fieldname": "delay_remarks",
+   "fieldtype": "Text",
+   "label": "Delay Remarks"
+  },
+  {
+   "fieldname": "waiting_for_side",
+   "fieldtype": "Select",
+   "label": "Waiting For Side",
+   "options": "None\nPrintechs\nCustomer\nThird Party"
+  },
+  {
+   "fieldname": "waiting_since",
+   "fieldtype": "Datetime",
+   "label": "Waiting Since"
+  },
+  {
+   "fieldname": "total_waiting_time_hours",
+   "fieldtype": "Float",
+   "label": "Total Waiting Time Hours",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_resolution",
+   "fieldtype": "Section Break",
+   "label": "Resolution"
+  },
+  {
+   "fieldname": "root_cause",
+   "fieldtype": "Small Text",
+   "label": "Root Cause"
+  },
+  {
+   "fieldname": "resolution_summary",
+   "fieldtype": "Text Editor",
+   "label": "Resolution Summary"
+  },
+  {
+   "fieldname": "resolution_type",
+   "fieldtype": "Select",
+   "label": "Resolution Type",
+   "options": "Fixed\nUser Guidance\nConfiguration Change\nEnhancement Logged\nDuplicate\nCannot Reproduce\nMoved to Project\nConverted to Quote"
+  },
+  {
+   "fieldname": "customer_confirmation_required",
+   "fieldtype": "Check",
+   "label": "Customer Confirmation Required",
+   "default": "0"
+  },
+  {
+   "description": "When set, the customer may confirm Resolved in the portal until this time; after this, the ticket is automatically set to Resolved if still open.",
+   "fieldname": "customer_resolution_deadline",
+   "fieldtype": "Datetime",
+   "label": "Customer resolution deadline"
+  },
+  {
+   "fieldname": "column_break_r",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "customer_rating",
+   "fieldtype": "Int",
+   "label": "Customer Rating"
+  },
+  {
+   "fieldname": "customer_feedback",
+   "fieldtype": "Small Text",
+   "label": "Customer Feedback"
+  },
+  {
+   "fieldname": "is_reopened",
+   "fieldtype": "Check",
+   "label": "Is Reopened",
+   "default": "0"
+  },
+  {
+   "fieldname": "reopened_count",
+   "fieldtype": "Int",
+   "label": "Reopened Count",
+   "default": "0"
+  },
+  {
+   "fieldname": "section_updates",
+   "fieldtype": "Section Break",
+   "label": "Updates"
+  },
+  {
+   "fieldname": "source_email_id",
+   "fieldtype": "Data",
+   "label": "Source Email ID"
+  },
+  {
+   "fieldname": "last_customer_update_on",
+   "fieldtype": "Datetime",
+   "label": "Last Customer Update On"
+  },
+  {
+   "fieldname": "last_internal_update_on",
+   "fieldtype": "Datetime",
+   "label": "Last Internal Update On"
+  },
+  {
+   "fieldname": "section_body",
+   "fieldtype": "Section Break",
+   "label": "Description"
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Text Editor",
+   "label": "Description"
+  },
+  {
+   "fieldname": "section_comments",
+   "fieldtype": "Section Break",
+   "label": "Comments"
+  },
+  {
+   "fieldname": "comments",
+   "fieldtype": "Table",
+   "label": "Comments",
+   "options": "Support Ticket Comment"
+  }
+ ],
+ "links": [],
+ "modified": "2026-04-06 00:00:00.000000",
+ "module": "Printechs Support System",
+ "name": "Support Ticket",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Support Team",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "search_fields": "subject,customer,customer_name",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "subject",
+ "track_changes": 1,
+ "subject_field": "subject",
+ "sender_field": "contact_email"
+}

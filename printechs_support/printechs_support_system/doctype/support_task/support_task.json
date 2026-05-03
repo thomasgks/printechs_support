@@ -1,0 +1,390 @@
+{
+ "actions": [],
+ "allow_import": 1,
+ "autoname": "naming_series:",
+ "creation": "2026-04-06 00:00:00.000000",
+ "doctype": "DocType",
+ "document_type": "Document",
+ "engine": "InnoDB",
+ "is_calendar_and_gantt": 1,
+ "field_order": [
+  "section_main",
+  "naming_series",
+  "support_ticket",
+  "ticket_subject",
+  "customer",
+  "support_agreement",
+  "division",
+  "column_break_1",
+  "project",
+  "source_project_task",
+  "subject",
+  "task_type",
+  "status",
+  "project_plan_progress",
+  "responsible_side",
+  "section_assign",
+  "assigned_to_user",
+  "task_assignees",
+  "assigned_to_contact",
+  "assigned_email",
+  "section_schedule",
+  "planned_start_date",
+  "planned_end_date",
+  "column_break_s",
+  "due_date",
+  "actual_start_date",
+  "actual_end_date",
+  "predecessor_task",
+  "depends_on_tasks",
+  "section_flags",
+  "is_calendar_event",
+  "send_email_reminder",
+  "reminder_datetime",
+  "section_delay",
+  "is_delayed",
+  "delay_owner",
+  "delay_reason",
+  "delay_remarks",
+  "delay_days",
+  "column_break_d",
+  "completion_notes",
+  "outcome",
+  "evidence_attachment",
+  "section_body",
+  "description",
+  "section_task_conversation",
+  "comments"
+ ],
+ "fields": [
+  {
+   "fieldname": "section_main",
+   "fieldtype": "Section Break",
+   "label": "Task"
+  },
+  {
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Series",
+   "options": "SUP-TSK-.YYYY.-.#####",
+   "reqd": 1,
+   "no_copy": 1,
+   "set_only_once": 1,
+   "print_hide": 1
+  },
+  {
+   "fieldname": "support_ticket",
+   "fieldtype": "Link",
+   "label": "Support Ticket",
+   "options": "Support Ticket",
+   "description": "Optional for internal-only work. When empty, set Division and use internal task types (e.g. Internal Task). Customer-facing work should use a ticket.",
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "ticket_subject",
+   "fieldtype": "Data",
+   "label": "Ticket Subject",
+   "read_only": 1,
+   "fetch_from": "support_ticket.subject",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "label": "Customer",
+   "options": "Customer",
+   "read_only": 1,
+   "fetch_from": "support_ticket.customer"
+  },
+  {
+   "fieldname": "support_agreement",
+   "fieldtype": "Link",
+   "label": "Support Agreement",
+   "options": "Support Agreement",
+   "read_only": 1,
+   "fetch_from": "support_ticket.support_agreement"
+  },
+  {
+   "fieldname": "division",
+   "fieldtype": "Select",
+   "label": "Division",
+   "options": "Software\nIndustrial\nRetail",
+   "fetch_from": "support_ticket.division",
+   "mandatory_depends_on": "eval:!doc.support_ticket",
+   "description": "Required when Support Ticket is not set (internal standalone task)."
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "ERPNext Project for roll-up reporting and Gantt. Open the Project to see linked Support Tasks and Tickets from the connections panel.",
+   "fieldname": "project",
+   "fieldtype": "Link",
+   "label": "Project",
+   "options": "Project"
+  },
+  {
+   "description": "Set when this Support Task was created from an ERPNext Project Task (plan). Each Project Task can be promoted only once.",
+   "fieldname": "source_project_task",
+   "fieldtype": "Link",
+   "label": "Project plan task (source)",
+   "options": "Task",
+   "unique": 1
+  },
+  {
+   "fieldname": "subject",
+   "fieldtype": "Data",
+   "label": "Subject",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "task_type",
+   "fieldtype": "Select",
+   "label": "Task Type",
+   "options": "Internal Task\nCustomer Action\nFollow-up\nDevelopment\nTesting\nUAT\nTraining\nMeeting\nImplementation Step",
+   "default": "Internal Task"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Open\nIn Progress\nWaiting for Customer\nWaiting for Printechs\nCompleted\nCancelled\nDelayed",
+   "default": "Open",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "depends_on": "eval:doc.source_project_task",
+   "description": "Optional. Syncs to the linked ERPNext Project Task % Progress. If empty, progress is derived from Support Task status (e.g. Completed → 100%).",
+   "fieldname": "project_plan_progress",
+   "fieldtype": "Percent",
+   "label": "Project plan progress %"
+  },
+  {
+   "fieldname": "responsible_side",
+   "fieldtype": "Select",
+   "label": "Responsible Side",
+   "options": "Printechs\nCustomer\nShared",
+   "default": "Printechs"
+  },
+  {
+   "fieldname": "section_assign",
+   "fieldtype": "Section Break",
+   "label": "Assignment"
+  },
+  {
+   "description": "Primary owner (auto-synced from Task Assignees). Use Task Assignees for one or more people.",
+   "fieldname": "assigned_to_user",
+   "fieldtype": "Link",
+   "label": "Assigned To User (Primary)",
+   "options": "User",
+   "in_list_view": 1
+  },
+  {
+   "description": "Assign one or more users; mark one as Primary. Primary is mirrored to Assigned To User for lists and reports.",
+   "fieldname": "task_assignees",
+   "fieldtype": "Table",
+   "label": "Task Assignees",
+   "options": "Support Task Assignee"
+  },
+  {
+   "fieldname": "assigned_to_contact",
+   "fieldtype": "Link",
+   "label": "Assigned To Contact",
+   "options": "Contact"
+  },
+  {
+   "fieldname": "assigned_email",
+   "fieldtype": "Data",
+   "label": "Assigned Email",
+   "options": "Email"
+  },
+  {
+   "fieldname": "section_schedule",
+   "fieldtype": "Section Break",
+   "label": "Schedule"
+  },
+  {
+   "fieldname": "planned_start_date",
+   "fieldtype": "Datetime",
+   "label": "Planned Start Date"
+  },
+  {
+   "fieldname": "planned_end_date",
+   "fieldtype": "Datetime",
+   "label": "Planned End Date"
+  },
+  {
+   "fieldname": "column_break_s",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "due_date",
+   "fieldtype": "Datetime",
+   "label": "Due Date",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "actual_start_date",
+   "fieldtype": "Datetime",
+   "label": "Actual Start Date"
+  },
+  {
+   "fieldname": "actual_end_date",
+   "fieldtype": "Datetime",
+   "label": "Actual End Date"
+  },
+  {
+   "description": "Optional predecessor on the same ticket for Gantt dependencies.",
+   "fieldname": "predecessor_task",
+   "fieldtype": "Link",
+   "label": "Predecessor Task",
+   "options": "Support Task"
+  },
+  {
+   "description": "Comma-separated task names for Gantt (auto-filled from Predecessor).",
+   "fieldname": "depends_on_tasks",
+   "fieldtype": "Data",
+   "label": "Depends On Tasks",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_flags",
+   "fieldtype": "Section Break",
+   "label": "Flags"
+  },
+  {
+   "fieldname": "is_calendar_event",
+   "fieldtype": "Check",
+   "label": "Is Calendar Event",
+   "default": "0"
+  },
+  {
+   "fieldname": "send_email_reminder",
+   "fieldtype": "Check",
+   "label": "Send Email Reminder",
+   "default": "0"
+  },
+  {
+   "fieldname": "reminder_datetime",
+   "fieldtype": "Datetime",
+   "label": "Reminder Datetime"
+  },
+  {
+   "fieldname": "section_delay",
+   "fieldtype": "Section Break",
+   "label": "Delay"
+  },
+  {
+   "fieldname": "is_delayed",
+   "fieldtype": "Check",
+   "label": "Is Delayed",
+   "default": "0",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "delay_owner",
+   "fieldtype": "Select",
+   "label": "Delay Owner",
+   "options": "Printechs\nCustomer\nThird Party\nShared"
+  },
+  {
+   "fieldname": "delay_reason",
+   "fieldtype": "Link",
+   "label": "Delay Reason",
+   "options": "Delay Reason"
+  },
+  {
+   "fieldname": "delay_remarks",
+   "fieldtype": "Text",
+   "label": "Delay Remarks"
+  },
+  {
+   "fieldname": "delay_days",
+   "fieldtype": "Float",
+   "label": "Delay Days",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_d",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "completion_notes",
+   "fieldtype": "Text Editor",
+   "label": "Completion Notes"
+  },
+  {
+   "fieldname": "outcome",
+   "fieldtype": "Small Text",
+   "label": "Outcome"
+  },
+  {
+   "fieldname": "evidence_attachment",
+   "fieldtype": "Attach",
+   "label": "Evidence Attachment"
+  },
+  {
+   "fieldname": "section_body",
+   "fieldtype": "Section Break",
+   "label": "Description"
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Text Editor",
+   "label": "Description"
+  },
+  {
+   "fieldname": "section_task_conversation",
+   "fieldtype": "Section Break",
+   "label": "Task conversation"
+  },
+  {
+   "fieldname": "comments",
+   "fieldtype": "Table",
+   "label": "Comments",
+   "options": "Support Task Comment"
+  }
+ ],
+ "links": [],
+ "modified": "2026-04-06 00:00:00.000000",
+ "module": "Printechs Support System",
+ "name": "Support Task",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Support Team",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "search_fields": "subject,support_ticket",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "subject",
+ "track_changes": 1
+}

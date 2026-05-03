@@ -1,0 +1,11 @@
+{
+	"name": "printechs_support",
+	"private": true,
+	"description": "Frappe app; portal UI lives in portal/ — npm scripts forward there.",
+	"scripts": {
+		"dev": "npm --prefix portal run dev",
+		"build": "npm --prefix portal run build",
+		"build:watch": "npm --prefix portal run build:watch",
+		"preview": "npm --prefix portal run preview"
+	}
+}

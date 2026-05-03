@@ -1,0 +1,389 @@
+{
+	"$schema": "Printechs Support — portal RPC reference for mobile clients",
+	"transport": {
+		"method": "POST",
+		"urlPattern": "{baseUrl}/api/method/{dottedPythonPath}",
+		"headersJsonBody": {
+			"Content-Type": "application/json",
+			"Accept": "application/json",
+			"Authorization": "token {api_key}:{api_secret}"
+		},
+		"headersSession": {
+			"Content-Type": "application/json",
+			"Accept": "application/json",
+			"Cookie": "{session_cookie_from_login}",
+			"X-Frappe-CSRF-Token": "{from_get_portal_csrf_token}"
+		},
+		"responseShape": {
+			"message": "RPC return value (typed per method below)",
+			"exc": "Present on error (HTML stack trace string)"
+		}
+	},
+	"methods": [
+		{
+			"path": "printechs_support.printechs_support_system.api.portal_api.get_portal_bootstrap",
+			"args": {},
+			"responseExample": {
+				"logged_in": true,
+				"user": "user@example.com",
+				"full_name": "Name",
+				"customers": ["CUST-001"],
+				"internal": true
+			}
+		},
+		{
+			"path": "printechs_support.printechs_support_system.api.portal_api.get_portal_csrf_token",
+			"args": {},
+			"note": "GET or POST; allow_guest. Returns string token in message."
+		},
+		{
+			"path": "printechs_support.printechs_support_system.api.portal_api.portal_login",
+			"args": { "usr": "user@example.com", "pwd": "secret" },
+			"note": "allow_guest; sets session cookie. Then call get_portal_csrf_token."
+		},
+		{
+			"path": "printechs_support.printechs_support_system.api.portal_api.get_portal_tickets",
+			"args": {
+				"limit": 200,
+				"search": "",
+				"active_only": 0
+			},
+			"responseItemExample": {
+				"name": "SUP-TKT-2026-00001",
+				"subject": "…",
+				"status": "Open",
+				"priority": "Medium",
+				"modified": "2026-04-12 10:04:47",
+				"customer": "CUST-001",
+				"due_date": "2026-04-18 14:00:00",
+				"due_date_calendar": "2026-04-18",
+				"assigned_to": "user@example.com",
+				"assigned_users": ["user@example.com"]
+			}
+		},
+		{
+			"path": "printechs_support.printechs_support_system.api.portal_api.get_portal_tasks",
+			"args": { "limit": 200 },
+			"responseItemExample": {
+				"name": "SUP-TSK-2026-00001",
+				"subject": "…",
+				"status": "Open",
+				"support_ticket": "SUP-TKT-2026-00001",
+				"division": "Software",
+				"due_date": "2026-04-18 09:00:00",
+				"due_date_calendar": "2026-04-18",
+				"assigned_to_user": "user@example.com",
+				"assigned_users": ["user@example.com"]
+			}
+		},
+		{
+			"path": "printechs_support.printechs_support_system.api.portal_api.get_portal_tasks_for_ticket",
+			"args": { "ticket_name": "SUP-TKT-2026-00001", "limit": 100 },
+			"note": "Same row shape as get_portal_tasks; ticket must be visible to the user."
+		},
+		{
+			"path": "printechs_support.printechs_support_system.api.portal_api.get_portal_ticket",
+			"args": { "name": "SUP-TKT-2026-00001" },
+			"responseExample": {
+				"name": "SUP-TKT-2026-00001",
+				"subject": "…",
+				"status": "Open",
+				"due_date": "2026-04-18 14:00:00",
+				"due_date_calendar": "2026-04-18",
+				"can_edit_ticket_schedule": true,
+				"assigned_users": ["user@example.com"]
+			}
+		},
+		{
+			"path": "printechs_support.printechs_support_system.api.portal_api.get_portal_task",
+			"args": { "name": "SUP-TSK-2026-00001" },
+			"responseExample": {
+				"name": "SUP-TSK-2026-00001",
+				"subject": "Follow-up visit",
+				"status": "Open",
+				"task_type": "Follow-up",
+				"support_ticket": "SUP-TKT-2026-00001",
+				"description": "Plain text (HTML stripped for display in portal).",
+				"due_date": "2026-04-18 09:00:00",
+				"due_date_calendar": "2026-04-18",
+				"assigned_users": ["user@example.com"],
+				"can_edit_task_schedule": true
+			}
+		},
+		{
+			"path": "printechs_support.printechs_support_system.api.portal_api.get_portal_dashboard_stats",
+			"args": {}
+		},
+		{
+			"path": "printechs_support.printechs_support_system.api.portal_api.get_portal_ticket_customers",
+			"args": {},
+			"responseExample": { "customers": [{ "name": "CUST-001", "customer_name": "Acme" }] }
+		},
+		{
+			"path": "printechs_support.printechs_support_system.api.portal_api.get_portal_ticket_types",
+			"args": { "customer": "" },
+			"responseExample": { "types": [{ "name": "TYPE-ID", "label": "General", "division": "Software" }] }
+		},
+		{
+			"path": "printechs_support.printechs_support_system.api.portal_api.create_portal_ticket",
+			"args": {
+				"subject": "Printer issue",
+				"ticket_type": "SUPPORT-TICKET-TYPE-NAME",
+				"description": "<p>Optional HTML</p>",
+				"priority": "Medium",
+				"customer": "CUST-001"
+			},
+			"responseExample": {
+				"name": "SUP-TKT-2026-00002",
+				"subject": "Printer issue",
+				"status": "Open",
+				"customer": "CUST-001"
+			}
+		},
+		{
+			"path": "printechs_support.printechs_support_system.api.portal_api.create_portal_support_task",
+			"argsTicketLinked": {
+				"support_ticket": "SUP-TKT-2026-00001",
+				"subject": "Follow-up visit",
+				"task_type": "Follow-up",
+				"due_date": "2026-04-20 10:00:00",
+				"description": "Optional. Plain text or HTML; server sanitizes."
+			},
+			"argsInternalNoTicket": {
+				"subject": "Internal backlog item",
+				"task_type": "Internal Task",
+				"division": "Software",
+				"due_date": "",
+				"description": "Optional context."
+			},
+			"argsInternalNoTicketNote": "Do not send support_ticket (omit key). Requires internal portal user.",
+			"responseExample": {
+				"name": "SUP-TSK-2026-00042",
+				"subject": "Follow-up visit",
+				"status": "Open",
+				"support_ticket": "SUP-TKT-2026-00001",
+				"division": "Software"
+			},
+			"note": "Ticket-linked: pass support_ticket. Internal-only: omit support_ticket, pass division. description optional for both."
+		},
+		{
+			"path": "printechs_support.printechs_support_system.api.portal_api.update_portal_task",
+			"args": {
+				"task_name": "SUP-TSK-2026-00001",
+				"subject": "Optional — internal users only",
+				"description": "Updated text or HTML (sanitized). Customers: description only on ticket-linked tasks."
+			},
+			"note": "Omit subject/description to no-op. Probe: send task_name only. Locked when linked ticket is resolved/closed (communication lock).",
+			"responseExample": {
+				"ok": true,
+				"name": "SUP-TSK-2026-00001",
+				"subject": "Follow-up visit",
+				"status": "Open"
+			}
+		},
+		{
+			"path": "printechs_support.printechs_support_system.api.portal_api.get_portal_ticket_comments",
+			"args": { "ticket_name": "SUP-TKT-2026-00001" }
+		},
+		{
+			"path": "printechs_support.printechs_support_system.api.portal_api.add_portal_ticket_comment",
+			"args": {
+				"ticket_name": "SUP-TKT-2026-00001",
+				"content": "<p>Reply</p>",
+				"is_internal_note": 0,
+				"in_reply_to": "",
+				"attachment": ""
+			}
+		},
+		{
+			"path": "printechs_support.printechs_support_system.api.portal_api.get_portal_task_comments",
+			"args": { "task_name": "SUP-TSK-2026-00001" },
+			"note": "Same row shape as get_portal_ticket_comments; customers only see customer-visible rows."
+		},
+		{
+			"path": "printechs_support.printechs_support_system.api.portal_api.add_portal_task_comment",
+			"args": {
+				"task_name": "SUP-TSK-2026-00001",
+				"content": "<p>Reply</p>",
+				"is_internal_note": 0,
+				"in_reply_to": "",
+				"attachment": ""
+			},
+			"note": "Same behaviour as add_portal_ticket_comment; locked when task is terminal or linked ticket is resolved/closed."
+		},
+		{
+			"path": "printechs_support.printechs_support_system.api.portal_api.update_portal_ticket_status",
+			"args": { "ticket_name": "SUP-TKT-2026-00001", "status": "In Progress" },
+			"responseExample": { "ok": true, "status": "In Progress" }
+		},
+		{
+			"path": "printechs_support.printechs_support_system.api.portal_api.update_portal_task_status",
+			"args": { "task_name": "SUP-TSK-2026-00001", "status": "In Progress" },
+			"responseExample": { "ok": true, "status": "In Progress" }
+		},
+		{
+			"path": "printechs_support.printechs_support_system.api.portal_api.update_portal_ticket_due_date",
+			"args": { "ticket_name": "SUP-TKT-2026-00001", "due_date": "2026-04-18 15:30:00" },
+			"note": "Empty string due_date clears.",
+			"responseExample": {
+				"ok": true,
+				"due_date": "2026-04-18 15:30:00",
+				"due_date_calendar": "2026-04-18"
+			}
+		},
+		{
+			"path": "printechs_support.printechs_support_system.api.portal_api.update_portal_task_due_date",
+			"args": { "task_name": "SUP-TSK-2026-00001", "due_date": "2026-04-18 09:00:00" },
+			"responseExample": {
+				"ok": true,
+				"due_date": "2026-04-18 09:00:00",
+				"due_date_calendar": "2026-04-18"
+			}
+		},
+		{
+			"path": "printechs_support.printechs_support_system.api.portal_api.update_portal_ticket_assignment",
+			"args": {
+				"ticket_name": "SUP-TKT-2026-00001",
+				"team": "Software Support Team",
+				"assignees": "[\"user1@example.com\",\"user2@example.com\"]"
+			},
+			"note": "Internal only. assignees: JSON array string or list; first user is primary. Omit team/assignees to no-op.",
+			"responseExample": {
+				"ok": true,
+				"team": "Software Support Team",
+				"assigned_to": "user1@example.com",
+				"assigned_users": ["user1@example.com", "user2@example.com"]
+			}
+		},
+		{
+			"path": "printechs_support.printechs_support_system.api.portal_api.update_portal_task_assignment",
+			"args": {
+				"task_name": "SUP-TSK-2026-00001",
+				"assignees": "[\"tech@example.com\"]"
+			},
+			"note": "Internal only.",
+			"responseExample": {
+				"ok": true,
+				"assigned_to_user": "tech@example.com",
+				"assigned_users": ["tech@example.com"]
+			}
+		},
+		{
+			"path": "printechs_support.printechs_support_system.api.portal_api.get_portal_teams",
+			"args": {},
+			"responseExample": { "teams": [{ "name": "Software Support Team", "label": "Software Support Team" }] }
+		},
+		{
+			"path": "printechs_support.printechs_support_system.api.portal_api.get_portal_assignment_users",
+			"args": { "limit": 200 },
+			"responseExample": { "users": [{ "name": "user@example.com", "full_name": "User Name" }] }
+		},
+		{
+			"path": "printechs_support.printechs_support_system.api.portal_api.get_portal_ticket_status_options",
+			"args": { "ticket_name": "SUP-TKT-2026-00001" },
+			"responseExample": { "options": ["Open", "In Progress", "Resolved"] }
+		},
+		{
+			"path": "printechs_support.printechs_support_system.api.portal_api.get_portal_task_status_options",
+			"args": {},
+			"responseExample": { "options": ["Open", "In Progress", "Completed"] }
+		},
+		{
+			"path": "printechs_support.printechs_support_system.api.portal_api.update_portal_ticket",
+			"args": {
+				"ticket_name": "SUP-TKT-2026-00001",
+				"subject": "Optional internal",
+				"description": "<p>Optional</p>",
+				"priority": "High"
+			},
+			"note": "Omit subject/description/priority to skip. Customers: description only. ticket_name-only probes capability.",
+			"responseExample": {
+				"ok": true,
+				"name": "SUP-TKT-2026-00001",
+				"subject": "…",
+				"status": "Open",
+				"priority": "High"
+			}
+		},
+		{
+			"path": "printechs_support.printechs_support_system.api.portal_api.get_portal_ticket_files",
+			"args": { "ticket_name": "SUP-TKT-2026-00001" }
+		},
+		{
+			"path": "printechs_support.printechs_support_system.api.portal_api.portal_upload_ticket_file",
+			"note": "Multipart form: field file + ticket_name in form. Not JSON body.",
+			"multipartFields": { "ticket_name": "SUP-TKT-2026-00001", "file": "(binary)" }
+		},
+		{
+			"path": "printechs_support.printechs_support_system.api.portal_api.register_mobile_push_token",
+			"args": { "expo_push_token": "ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]" },
+			"note": "Requires logged-in session (same as portal). Persists token on User.printechs_expo_push_token. Call after login and whenever Expo rotates the token.",
+			"responseExample": { "ok": true }
+		},
+		{
+			"path": "printechs_support.printechs_support_system.api.portal_api.send_test_mobile_push",
+			"args": {},
+			"argsOtherUser": { "user": "customer@example.com" },
+			"note": "Sends one Expo test push. Default: current user (must have a stored token). Optional user: System Manager / Administrator only. POST {} after login.",
+			"responseExample": { "ok": true, "target": "customer@example.com", "message": "Test notification sent via Expo." }
+		}
+	],
+	"pushNotifications": {
+		"serverSends": "When a customer-visible Support Ticket thread row is added by internal staff (same cases as customer email in ticket_comment_emails), the server POSTs to Expo Push API (exp.host) using stored tokens. Payload data includes ticket_name and type (ticket_message | new_ticket).",
+		"technicianMobileWhen": "On new customer Support Ticket (after_insert), technicians with internal roles receive Expo push if they are ticket assignees, Support Team members, or team lead (Employee user_id). Same User.printechs_expo_push_token as customers; technician must log in with a desk/portal user that has Coordinator/Engineer/Support Team etc. and call register_mobile_push_token. Payload type: new_customer_ticket.",
+		"customerMobileWhen": "Only portal users (Printechs Support Customer role) whose User email matches ticket.contact_email or Contact.user for ticket.contact_person receive pushes. The app must call register_mobile_push_token after login.",
+		"expoRequestShape": {
+			"url": "https://exp.host/--/api/v2/push/send",
+			"body": {
+				"messages": [
+					{
+						"to": "ExponentPushToken[…]",
+						"title": "string",
+						"body": "string",
+						"data": { "ticket_name": "SUP-TKT-…", "type": "ticket_message", "kind": "Customer Reply" },
+						"sound": "default"
+					}
+				]
+			}
+		}
+	},
+	"calendarLogic": {
+		"description": "Build month/week/day from get_portal_tasks + get_portal_tickets. Use due_date_calendar or first 10 chars of due_date for the day key. Do not use Date/toISOString for calendar day. Items without due_date may be shown on today for current assignee (portal web does this)."
+	},
+	"supportTaskMobileFlow": {
+		"createTicketLinked": {
+			"POST": "/api/method/printechs_support.printechs_support_system.api.portal_api.create_portal_support_task",
+			"body": {
+				"support_ticket": "SUP-TKT-2026-00001",
+				"subject": "Task title",
+				"task_type": "Internal Task",
+				"due_date": "2026-04-20 14:00:00",
+				"description": "Optional details"
+			}
+		},
+		"createInternalNoTicket": {
+			"POST": "/api/method/printechs_support.printechs_support_system.api.portal_api.create_portal_support_task",
+			"body": {
+				"subject": "Internal work",
+				"task_type": "Internal Task",
+				"division": "Software",
+				"due_date": "",
+				"description": "Optional"
+			},
+			"note": "Must not include support_ticket. Internal users only."
+		},
+		"updateDescriptionOrSubject": {
+			"POST": "/api/method/printechs_support.printechs_support_system.api.portal_api.update_portal_task",
+			"body": {
+				"task_name": "SUP-TSK-2026-00001",
+				"description": "New description (plain or HTML)"
+			},
+			"bodySubjectInternalOnly": {
+				"task_name": "SUP-TSK-2026-00001",
+				"subject": "New title",
+				"description": "Optional"
+			}
+		},
+		"typescriptHelpers": "See mobile/lib/portal.ts — createPortalSupportTask, updatePortalTask, getPortalTask, getPortalTasksForTicket."
+	}
+}

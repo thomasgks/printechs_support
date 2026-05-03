@@ -1,0 +1,109 @@
+{
+ "allow_copy": 0,
+ "creation": "2026-04-19 12:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "posted_by",
+  "posted_by_role_type",
+  "is_internal",
+  "reply_type",
+  "subject",
+  "message",
+  "previous_status",
+  "new_status",
+  "previous_action_required_from",
+  "new_action_required_from",
+  "created_on",
+  "attachment"
+ ],
+ "fields": [
+  {
+   "fieldname": "posted_by",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Posted By",
+   "options": "User",
+   "reqd": 1
+  },
+  {
+   "fieldname": "posted_by_role_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Posted By Role Type",
+   "options": "Customer\nTechnician\nManager\nSystem",
+   "reqd": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "is_internal",
+   "fieldtype": "Check",
+   "label": "Is Internal"
+  },
+  {
+   "fieldname": "reply_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Reply Type",
+   "options": "Acknowledgement\nInformational Reply\nWork Update\nRequest Customer Input\nProvide Requested Information\nAsk Follow-up Question\nResolution\nConfirm Resolved\nReopen Issue\nInternal Note\nAssignment Update\nSystem Status Update",
+   "reqd": 1
+  },
+  {
+   "fieldname": "subject",
+   "fieldtype": "Data",
+   "label": "Subject"
+  },
+  {
+   "fieldname": "message",
+   "fieldtype": "Text Editor",
+   "label": "Message"
+  },
+  {
+   "fieldname": "previous_status",
+   "fieldtype": "Data",
+   "label": "Previous Status",
+   "read_only": 1
+  },
+  {
+   "fieldname": "new_status",
+   "fieldtype": "Data",
+   "label": "New Status",
+   "read_only": 1
+  },
+  {
+   "fieldname": "previous_action_required_from",
+   "fieldtype": "Data",
+   "label": "Previous Action Required From",
+   "read_only": 1
+  },
+  {
+   "fieldname": "new_action_required_from",
+   "fieldtype": "Data",
+   "label": "New Action Required From",
+   "read_only": 1
+  },
+  {
+   "fieldname": "created_on",
+   "fieldtype": "Datetime",
+   "in_list_view": 1,
+   "label": "Created On",
+   "reqd": 1
+  },
+  {
+   "fieldname": "attachment",
+   "fieldtype": "Attach",
+   "label": "Attachment"
+  }
+ ],
+ "istable": 1,
+ "links": [],
+ "modified": "2026-04-19 12:00:00.000000",
+ "module": "Printechs Support System",
+ "name": "Support Ticket Workflow Log",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "created_on",
+ "sort_order": "DESC",
+ "track_changes": 1
+}

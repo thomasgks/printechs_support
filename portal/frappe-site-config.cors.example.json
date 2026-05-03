@@ -1,0 +1,3 @@
+{
+	"allow_cors": ["https://your-portal-subdomain.example.com"]
+}

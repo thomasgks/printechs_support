@@ -1,0 +1,93 @@
+{
+ "actions": [],
+ "creation": "2026-04-06 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "section_sla",
+  "default_work_start",
+  "default_work_end",
+  "default_holiday_list",
+  "column_break_1",
+  "fallback_customer",
+  "section_email"
+ ],
+ "fields": [
+  {
+   "fieldname": "section_sla",
+   "fieldtype": "Section Break",
+   "label": "SLA Defaults (Working Hours)"
+  },
+  {
+   "default": "09:00:00",
+   "fieldname": "default_work_start",
+   "fieldtype": "Time",
+   "label": "Default Work Start"
+  },
+  {
+   "default": "18:00:00",
+   "fieldname": "default_work_end",
+   "fieldtype": "Time",
+   "label": "Default Work End"
+  },
+  {
+   "fieldname": "default_holiday_list",
+   "fieldtype": "Link",
+   "label": "Default Holiday List",
+   "options": "Holiday List"
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "If an inbound email cannot be matched to a Contact linked to a Customer, assign the ticket to this Customer for triage (optional).",
+   "fieldname": "fallback_customer",
+   "fieldtype": "Link",
+   "label": "Fallback Customer (Email)",
+   "options": "Customer"
+  },
+  {
+   "description": "For inbound email: ensure Contact is linked to Customer. Optional fallback customer is used when sender cannot be matched.",
+   "fieldname": "section_email",
+   "fieldtype": "Section Break",
+   "label": "Email"
+  }
+ ],
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-04-06 00:00:00.000000",
+ "module": "Printechs Support System",
+ "name": "Printechs Support Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 0,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 0,
+   "delete": 0,
+   "email": 0,
+   "export": 0,
+   "print": 0,
+   "read": 1,
+   "report": 0,
+   "role": "Printechs Support Coordinator",
+   "share": 0,
+   "write": 0
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

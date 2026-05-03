@@ -1,0 +1,25 @@
+{# Minimal shell: no Standard Navbar / Footer / web.html wrappers — only base.html session + CSRF + React bundle. #}
+{% extends "templates/base.html" %}
+
+{% block banner %}{% endblock %}
+{% block navbar %}{% endblock %}
+{% block footer %}{% endblock %}
+
+{% block head_include %}
+{{ super() }}
+<style id="printechs-portal-shell-reset">
+	html, body { margin: 0; min-height: 100%; }
+	/* Reduce bleed-in from website theme on portal routes */
+	body.printechs-portal-standalone { background: #f3f4f6; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="root"></div>
+{% if portal_js_url and portal_css_url %}
+<link rel="stylesheet" crossorigin href="{{ portal_css_url }}" />
+<script type="module" crossorigin src="{{ portal_js_url }}"></script>
+{% else %}
+{% include "includes/portal_react_bundle.html" ignore missing %}
+{% endif %}
+{% endblock %}

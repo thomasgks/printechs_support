@@ -1,0 +1,338 @@
+{
+ "actions": [],
+ "allow_import": 1,
+ "autoname": "naming_series:",
+ "creation": "2026-04-06 00:00:00.000000",
+ "doctype": "DocType",
+ "document_type": "Document",
+ "engine": "InnoDB",
+ "field_order": [
+  "section_main",
+  "naming_series",
+  "customer",
+  "customer_name",
+  "column_break_1",
+  "division",
+  "agreement_type",
+  "status",
+  "section_validity",
+  "valid_from",
+  "column_break_v",
+  "valid_to",
+  "grace_period_days",
+  "section_priority",
+  "default_priority",
+  "section_flags",
+  "is_support_enabled",
+  "allows_ticket_creation",
+  "column_break_f",
+  "is_billable_after_expiry",
+  "section_sla",
+  "response_sla_hours",
+  "resolution_sla_hours",
+  "column_break_sla",
+  "working_hours_only",
+  "work_start_time",
+  "work_end_time",
+  "sla_holiday_list",
+  "section_limits",
+  "max_tickets_per_month",
+  "contract_value",
+  "section_context",
+  "project",
+  "software_product",
+  "column_break_ctx",
+  "environment",
+  "implementation_date",
+  "go_live_date",
+  "section_portal_contacts",
+  "portal_contacts",
+  "section_signed_agreement",
+  "signed_on",
+  "column_break_signed",
+  "signed_copy",
+  "section_portal",
+  "auto_apply_for_portal",
+  "portal_visible",
+  "portal_activation_sent",
+  "section_portal_ticket_types",
+  "printechs_agreement_allowed_ticket_types",
+  "section_coverage_table",
+  "coverage_detail",
+  "section_notes",
+  "notes"
+ ],
+ "fields": [
+  {"fieldname": "section_main", "fieldtype": "Section Break", "label": "Agreement"},
+  {
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Series",
+   "no_copy": 1,
+   "options": "SUP-AGR-.YYYY.-.#####",
+   "print_hide": 1,
+   "reqd": 1,
+   "set_only_once": 1
+  },
+  {
+   "fieldname": "customer",
+   "fieldtype": "Link",
+   "ignore_user_permissions": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Customer",
+   "options": "Customer",
+   "reqd": 1
+  },
+  {
+   "fetch_from": "customer.customer_name",
+   "fieldname": "customer_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Customer Name",
+   "read_only": 1
+  },
+  {"fieldname": "column_break_1", "fieldtype": "Column Break"},
+  {
+   "default": "Software",
+   "fieldname": "division",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Division",
+   "options": "Software\nIndustrial\nRetail",
+   "reqd": 1
+  },
+  {
+   "fieldname": "agreement_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Agreement Type",
+   "options": "AMC\nPMC\nWarranty\nNew Implementation\nSupport Contract\nDevelopment Contract",
+   "reqd": 1
+  },
+  {
+   "default": "Draft",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "Draft\nSigned\nActive\nExpired",
+   "reqd": 1
+  },
+  {"fieldname": "section_validity", "fieldtype": "Section Break", "label": "Validity"},
+  {"fieldname": "valid_from", "fieldtype": "Date", "label": "Valid From"},
+  {"fieldname": "column_break_v", "fieldtype": "Column Break"},
+  {"fieldname": "valid_to", "fieldtype": "Date", "label": "Valid To"},
+  {
+   "fieldname": "grace_period_days",
+   "fieldtype": "Int",
+   "label": "Grace Period Days",
+   "non_negative": 1
+  },
+  {"fieldname": "section_priority", "fieldtype": "Section Break", "label": "Priority"},
+  {
+   "default": "Medium",
+   "fieldname": "default_priority",
+   "fieldtype": "Select",
+   "label": "Default Priority",
+   "options": "Low\nMedium\nHigh\nCritical",
+   "reqd": 1
+  },
+  {"fieldname": "section_flags", "fieldtype": "Section Break", "label": "Entitlement"},
+  {
+   "default": "1",
+   "fieldname": "is_support_enabled",
+   "fieldtype": "Check",
+   "label": "Is Support Enabled"
+  },
+  {
+   "default": "1",
+   "fieldname": "allows_ticket_creation",
+   "fieldtype": "Check",
+   "label": "Allows Ticket Creation"
+  },
+  {"fieldname": "column_break_f", "fieldtype": "Column Break"},
+  {
+   "default": "0",
+   "fieldname": "is_billable_after_expiry",
+   "fieldtype": "Check",
+   "label": "Is Billable After Expiry"
+  },
+  {"fieldname": "section_sla", "fieldtype": "Section Break", "label": "SLA"},
+  {
+   "default": "8",
+   "fieldname": "response_sla_hours",
+   "fieldtype": "Float",
+   "label": "Response SLA Hours",
+   "non_negative": 1,
+   "reqd": 1
+  },
+  {
+   "default": "48",
+   "fieldname": "resolution_sla_hours",
+   "fieldtype": "Float",
+   "label": "Resolution SLA Hours",
+   "non_negative": 1,
+   "reqd": 1
+  },
+  {"fieldname": "column_break_sla", "fieldtype": "Column Break"},
+  {
+   "default": "0",
+   "fieldname": "working_hours_only",
+   "fieldtype": "Check",
+   "label": "Working Hours Only"
+  },
+  {
+   "default": "09:00:00",
+   "depends_on": "eval:doc.working_hours_only",
+   "fieldname": "work_start_time",
+   "fieldtype": "Time",
+   "label": "Work Start"
+  },
+  {
+   "default": "18:00:00",
+   "depends_on": "eval:doc.working_hours_only",
+   "fieldname": "work_end_time",
+   "fieldtype": "Time",
+   "label": "Work End"
+  },
+  {
+   "depends_on": "eval:doc.working_hours_only",
+   "fieldname": "sla_holiday_list",
+   "fieldtype": "Link",
+   "ignore_user_permissions": 1,
+   "label": "SLA Holiday List",
+   "options": "Holiday List"
+  },
+  {"fieldname": "section_limits", "fieldtype": "Section Break", "label": "Limits & Value"},
+  {
+   "fieldname": "max_tickets_per_month",
+   "fieldtype": "Int",
+   "label": "Max Tickets Per Month",
+   "non_negative": 1
+  },
+  {
+   "fieldname": "contract_value",
+   "fieldtype": "Currency",
+   "label": "Contract Value"
+  },
+  {"fieldname": "section_context", "fieldtype": "Section Break", "label": "Project & Product"},
+  {
+   "fieldname": "project",
+   "fieldtype": "Link",
+   "ignore_user_permissions": 1,
+   "label": "Project",
+   "options": "Project"
+  },
+  {
+   "fieldname": "software_product",
+   "fieldtype": "Link",
+   "ignore_user_permissions": 1,
+   "label": "Software Product",
+   "options": "Item"
+  },
+  {"fieldname": "column_break_ctx", "fieldtype": "Column Break"},
+  {
+   "fieldname": "environment",
+   "fieldtype": "Select",
+   "label": "Environment",
+   "options": "Production\nUAT\nTest\nDevelopment"
+  },
+  {"fieldname": "implementation_date", "fieldtype": "Date", "label": "Implementation Date"},
+  {"fieldname": "go_live_date", "fieldtype": "Date", "label": "Go Live Date"},
+  {
+   "fieldname": "section_portal_contacts",
+   "fieldtype": "Section Break",
+   "label": "Portal contacts"
+  },
+  {
+   "fieldname": "portal_contacts",
+   "fieldtype": "Table",
+   "label": "Portal contacts",
+   "options": "Support Agreement Portal Contact"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "section_signed_agreement",
+   "fieldtype": "Section Break",
+   "label": "Signed agreement"
+  },
+  {
+   "fieldname": "signed_on",
+   "fieldtype": "Date",
+   "label": "Signed on"
+  },
+  {"fieldname": "column_break_signed", "fieldtype": "Column Break"},
+  {
+   "description": "Upload the executed / signed PDF or scan.",
+   "fieldname": "signed_copy",
+   "fieldtype": "Attach",
+   "label": "Signed document"
+  },
+  {"fieldname": "section_portal", "fieldtype": "Section Break", "label": "Portal"},
+  {
+   "default": "0",
+   "fieldname": "auto_apply_for_portal",
+   "fieldtype": "Check",
+   "label": "Auto Apply for Portal"
+  },
+  {
+   "default": "1",
+   "fieldname": "portal_visible",
+   "fieldtype": "Check",
+   "label": "Portal Visible"
+  },
+  {
+   "default": "0",
+   "fieldname": "portal_activation_sent",
+   "fieldtype": "Check",
+   "hidden": 1,
+   "label": "Portal activation email sent",
+   "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "section_portal_ticket_types",
+   "fieldtype": "Section Break",
+   "label": "Portal — Allowed Ticket Types"
+  },
+  {
+   "description": "If this table has rows, those types apply for the portal while this agreement is active and portal-visible (overrides the Customer’s Portal — Allowed Ticket Types). Leave empty to use only the Customer list or all types.",
+   "fieldname": "printechs_agreement_allowed_ticket_types",
+   "fieldtype": "Table",
+   "label": "Allowed ticket types",
+   "options": "Customer Allowed Ticket Type"
+  },
+  {
+   "fieldname": "section_coverage_table",
+   "fieldtype": "Section Break",
+   "label": "Coverage Detail"
+  },
+  {
+   "fieldname": "coverage_detail",
+   "fieldtype": "Table",
+   "label": "Coverage Detail",
+   "options": "Support Agreement Coverage Detail"
+  },
+  {"fieldname": "section_notes", "fieldtype": "Section Break", "label": "Notes"},
+  {"fieldname": "notes", "fieldtype": "Text Editor", "label": "Notes"}
+ ],
+ "default_print_format": "Support Agreement Standard",
+ "links": [],
+ "modified": "2026-04-06 00:00:00.000000",
+ "module": "Printechs Support System",
+ "name": "Support Agreement",
+ "owner": "Administrator",
+ "permissions": [
+  {"create": 1, "delete": 1, "email": 1, "export": 1, "print": 1, "read": 1, "report": 1, "role": "System Manager", "share": 1, "write": 1},
+  {"create": 1, "delete": 1, "email": 1, "export": 1, "print": 1, "read": 1, "report": 1, "role": "Support Team", "share": 1, "write": 1}
+ ],
+ "search_fields": "customer,customer_name,agreement_type",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "title_field": "customer_name",
+ "track_changes": 1
+}

@@ -1,0 +1,35 @@
+{
+ "add_total_row": 0,
+ "columns": [],
+ "creation": "2026-04-06 00:00:00.000000",
+ "disabled": 0,
+ "docstatus": 0,
+ "doctype": "Report",
+ "filters": [],
+ "idx": 0,
+ "is_standard": "Yes",
+ "modified": "2026-04-06 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Printechs Support System",
+ "name": "Open Support Tickets",
+ "owner": "Administrator",
+ "prepared_report": 0,
+ "query": "SELECT\n\t`tabSupport Ticket`.name AS `Ticket:Link/Support Ticket:160`,\n\t`tabSupport Ticket`.subject AS `Subject:Data:200`,\n\t`tabSupport Ticket`.customer AS `Customer:Link/Customer:140`,\n\t`tabSupport Ticket`.status AS `Status:Data:120`,\n\t`tabSupport Ticket`.priority AS `Priority:Data:80`,\n\t`tabSupport Ticket`.opening_date AS `Opening Date:Datetime:160`\nFROM `tabSupport Ticket`\nWHERE `tabSupport Ticket`.status NOT IN ('Closed', 'Cancelled')\nORDER BY `tabSupport Ticket`.opening_date DESC\nLIMIT 500",
+ "ref_doctype": "Support Ticket",
+ "report_name": "Open Support Tickets",
+ "report_type": "Query Report",
+ "roles": [
+  {
+   "role": "Printechs Support Coordinator"
+  },
+  {
+   "role": "Printechs Support Engineer"
+  },
+  {
+   "role": "Printechs Support Project Manager"
+  },
+  {
+   "role": "System Manager"
+  }
+ ]
+}
