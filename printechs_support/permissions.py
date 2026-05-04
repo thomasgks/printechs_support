@@ -570,6 +570,34 @@ def user_can_edit_portal_ticket_schedule(user: str, ticket_name: str) -> bool:
 		return False
 
 
+def help_article_permission_query_conditions(user: str) -> str:
+	if not user:
+		user = frappe.session.user
+	if user == "Administrator" or user_has_unrestricted_support_ticket_catalog(user):
+		return ""
+	if user != "Guest" and user_sees_all_support_records(user):
+		return "`tabHelp Article`.is_published = 1 AND `tabHelp Article`.show_in_desk = 1"
+	return (
+		"`tabHelp Article`.is_published = 1 "
+		"AND `tabHelp Article`.show_in_portal = 1 "
+		"AND `tabHelp Article`.allow_customer_view = 1"
+	)
+
+
+def help_article_has_permission(doc, user: str | None = None, permission_type: str | None = None) -> bool:
+	user = user or frappe.session.user
+	if permission_type and permission_type.lower() in {"write", "create", "delete", "submit", "cancel"}:
+		return user == "Administrator" or bool(
+			{"System Manager", "Printechs Support Coordinator", "Printechs Support Engineer"}
+			& set(frappe.get_roles(user))
+		)
+	if user == "Administrator" or user_has_unrestricted_support_ticket_catalog(user):
+		return True
+	if user != "Guest" and user_sees_all_support_records(user):
+		return bool(doc.is_published and doc.show_in_desk)
+	return bool(doc.is_published and doc.show_in_portal and doc.allow_customer_view)
+
+
 def user_can_access_support_portal(user: str) -> bool:
 	"""Who may use the React support portal (session after login)."""
 	if not user or user == "Guest":

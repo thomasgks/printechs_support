@@ -182,6 +182,28 @@ export async function portalLogin(usr: string, pwd: string): Promise<void> {
 	clearCsrfCache();
 }
 
+export async function portalLogout(): Promise<void> {
+	await callMethod<{ logged_out: boolean }>(
+		"printechs_support.printechs_support_system.api.portal_api.portal_logout",
+	);
+	clearCsrfCache();
+}
+
+export function portalHomeUrl(): string {
+	if (typeof window === "undefined") {
+		return "/support-portal";
+	}
+	return import.meta.env.DEV ? "/" : `${window.location.origin}/support-portal`;
+}
+
+export async function completePortalRegistration(key: string, newPassword: string): Promise<void> {
+	await callMethod<{ logged_in: boolean; redirect_url?: string }>(
+		"printechs_support.printechs_support_system.api.portal_api.complete_portal_registration",
+		{ key, new_password: newPassword },
+	);
+	clearCsrfCache();
+}
+
 export function getPortalBootstrap() {
 	if (isPortalMockDataEnabled()) {
 		return Promise.resolve(MOCK_PORTAL_BOOTSTRAP);
@@ -207,6 +229,56 @@ export function getPortalTickets(
 			active_only: opts?.activeOnly === true ? 1 : 0,
 		},
 	);
+}
+
+export function createGoogleMeet(ticketId: string) {
+	return callMethod<{
+		success: boolean;
+		meeting_url: string;
+		event_id?: string;
+		message: string;
+		warning?: string | null;
+	}>("printechs_support.printechs_support_system.api.google_meet.create_google_meet", {
+		ticket_id: ticketId,
+		notify_customer: 1,
+	});
+}
+
+export function resendGoogleMeetLink(ticketId: string) {
+	return callMethod<{
+		success: boolean;
+		meeting_url: string;
+		event_id?: string;
+		message: string;
+		warning?: string | null;
+	}>("printechs_support.printechs_support_system.api.google_meet.resend_google_meet_link", {
+		ticket_id: ticketId,
+	});
+}
+
+export function getContextualHelp(args: {
+	module_area?: string;
+	doctype?: string;
+	screen?: string;
+	issue_type?: string;
+	search?: string;
+	customer_view?: number;
+	limit?: number;
+}) {
+	return callMethod<{
+		success: boolean;
+		articles: Array<{
+			name: string;
+			title: string;
+			summary: string;
+			category: string;
+			module_area: string;
+			related_doctype: string;
+			video_url: string;
+			has_video: boolean;
+			attachments_count: number;
+		}>;
+	}>("printechs_support.api.help_article.get_contextual_help", args);
 }
 
 export function getPortalTasks(limit = 50) {

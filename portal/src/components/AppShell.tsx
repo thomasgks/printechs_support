@@ -1,7 +1,7 @@
-import { type ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import { NavLink } from "react-router-dom";
 import type { PortalBootstrapResult } from "../api";
-import { isPortalMockDataEnabled, logoutUrl } from "../api";
+import { isPortalMockDataEnabled, portalHomeUrl, portalLogout } from "../api";
 import PortalHeaderSearch from "./PortalHeaderSearch";
 
 type ShellProps = {
@@ -63,6 +63,13 @@ function NavIcon({ name }: { name: string }) {
 					<path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" strokeLinecap="round" />
 				</svg>
 			);
+		case "help":
+			return (
+				<svg className={common} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+					<circle cx="12" cy="12" r="10" />
+					<path d="M9.5 9a2.5 2.5 0 015 0c0 1.8-2.5 2.2-2.5 4M12 17h.01" strokeLinecap="round" strokeLinejoin="round" />
+				</svg>
+			);
 		default:
 			return null;
 	}
@@ -76,16 +83,30 @@ const nav = [
 	{ to: "/calendar", label: "Calendar", icon: "calendar" },
 	{ to: "/reports", label: "Reports", icon: "report" },
 	{ to: "/customers", label: "Customers", icon: "users" },
+	{ href: "/help-center", label: "Help Center", icon: "help" },
 	{ to: "/settings", label: "Settings", icon: "settings" },
 ] as const;
 
 export default function AppShell({ bootstrap, children }: ShellProps) {
+	const [signingOut, setSigningOut] = useState(false);
 	const initial = (bootstrap.full_name || bootstrap.user || "?")
 		.split(/\s+/)
 		.map((s) => s[0])
 		.join("")
 		.slice(0, 2)
 		.toUpperCase();
+
+	async function signOut() {
+		if (signingOut) {
+			return;
+		}
+		setSigningOut(true);
+		try {
+			await portalLogout();
+		} finally {
+			window.location.assign(portalHomeUrl());
+		}
+	}
 
 	return (
 		<div className="app-root">
@@ -102,17 +123,24 @@ export default function AppShell({ bootstrap, children }: ShellProps) {
 				</div>
 				<nav className="app-sidebar-nav">
 					{nav.map((item) => (
-						<NavLink
-							key={item.to}
-							to={item.to}
-							end={"end" in item ? item.end : false}
-							className={({ isActive }) =>
-								`sidebar-link flex items-center gap-2 ${isActive ? "active" : ""}`
-							}
-						>
-							<NavIcon name={item.icon} />
-							<span>{item.label}</span>
-						</NavLink>
+						"href" in item ? (
+							<a key={item.href} href={item.href} className="sidebar-link flex items-center gap-2">
+								<NavIcon name={item.icon} />
+								<span>{item.label}</span>
+							</a>
+						) : (
+							<NavLink
+								key={item.to}
+								to={item.to}
+								end={"end" in item ? item.end : false}
+								className={({ isActive }) =>
+									`sidebar-link flex items-center gap-2 ${isActive ? "active" : ""}`
+								}
+							>
+								<NavIcon name={item.icon} />
+								<span>{item.label}</span>
+							</NavLink>
+						)
 					))}
 				</nav>
 			</aside>
@@ -162,12 +190,14 @@ export default function AppShell({ bootstrap, children }: ShellProps) {
 									<p className="truncate text-xs font-semibold text-slate-900">{bootstrap.full_name || bootstrap.user}</p>
 									<p className="truncate text-[11px] text-slate-500">{bootstrap.user}</p>
 								</div>
-								<a
-									href={logoutUrl()}
-									className="block px-3 py-2.5 text-sm font-semibold text-slate-800 hover:bg-slate-50"
+								<button
+									type="button"
+									onClick={signOut}
+									disabled={signingOut}
+									className="block w-full border-0 bg-transparent px-3 py-2.5 text-left text-sm font-semibold text-slate-800 hover:bg-slate-50 disabled:cursor-wait disabled:text-slate-500"
 								>
-									Sign out
-								</a>
+									{signingOut ? "Signing out..." : "Sign out"}
+								</button>
 							</div>
 						</details>
 					</div>

@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ article.title or "Help Article" }}</title>
+<style>
+  :root {
+    color-scheme: light;
+    --ink: #0f172a;
+    --muted: #64748b;
+    --line: rgba(148,163,184,.24);
+    --blue: #2563eb;
+    --violet: #7c3aed;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background:
+      radial-gradient(circle at 10% 10%, rgba(37,99,235,.18), transparent 30%),
+      radial-gradient(circle at 90% 0%, rgba(124,58,237,.16), transparent 30%),
+      linear-gradient(180deg,#eef6ff 0%,#f8fafc 42%,#fff 100%);
+    color: var(--ink);
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    opacity: .38;
+    background-image:
+      linear-gradient(rgba(15,23,42,.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(15,23,42,.035) 1px, transparent 1px);
+    background-size: 44px 44px;
+    mask-image: linear-gradient(to bottom,#000 0%, transparent 75%);
+  }
+  .article-wrap { position: relative; width: min(1320px, calc(100% - 48px)); margin: 0 auto; padding: 30px 0 58px; }
+  .article-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+  .article-brand { display: flex; align-items: center; gap: 11px; font-weight: 900; color: var(--ink); letter-spacing: -.02em; }
+  .article-brand-mark { width: 38px; height: 38px; border-radius: 12px; background: linear-gradient(135deg,var(--blue),var(--violet)); box-shadow: 0 18px 36px -18px rgba(37,99,235,.95); position: relative; }
+  .article-brand-mark::after { content: "?"; color: #fff; font-weight: 900; position: absolute; inset: 0; display: grid; place-items: center; }
+  .article-brand-logo { max-width: 150px; max-height: 42px; object-fit: contain; display: block; }
+  .article-back { color: var(--blue); font-weight: 800; text-decoration: none; border: 1px solid rgba(37,99,235,.18); background: rgba(255,255,255,.72); padding: 10px 14px; border-radius: 999px; }
+  .article-card { overflow: hidden; margin-top: 18px; border: 1px solid rgba(255,255,255,.75); border-radius: 30px; background: rgba(255,255,255,.88); padding: 0; box-shadow: 0 34px 100px -52px rgba(15,23,42,.62); backdrop-filter: blur(16px); }
+  .article-hero { position: relative; padding: 36px 38px 30px; background: linear-gradient(135deg, rgba(255,255,255,.95), rgba(239,246,255,.78)); border-bottom: 1px solid rgba(226,232,240,.9); }
+  .article-hero::after { content: ""; position: absolute; right: -70px; top: -80px; width: 220px; height: 220px; border-radius: 999px; background: linear-gradient(135deg, rgba(37,99,235,.16), rgba(124,58,237,.16)); }
+  .article-kicker { position: relative; margin: 0 0 10px; color: var(--blue); font-size: 12px; text-transform: uppercase; letter-spacing: .18em; font-weight: 900; }
+  .article-title { position: relative; margin: 0; color: var(--ink); font-size: clamp(32px,5vw,52px); line-height: 1; font-weight: 950; letter-spacing: -.055em; }
+  .article-summary { position: relative; margin: 14px 0 0; color: var(--muted); font-size: 17px; line-height: 1.65; max-width: 720px; }
+  .article-meta { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+  .article-pill { background: #f1f5f9; border: 1px solid rgba(148,163,184,.18); border-radius: 999px; padding: 5px 10px; font-size: 12px; color: #475569; font-weight: 800; }
+  .article-body { padding: 30px 38px 38px; }
+  .article-content { color: #1e293b; line-height: 1.78; font-size: 16px; }
+  .article-content p:first-child { margin-top: 0; }
+  .article-content a { color: var(--blue); font-weight: 700; }
+  .article-video { margin-bottom: 26px; border-radius: 18px; overflow: hidden; box-shadow: 0 22px 60px -38px rgba(15,23,42,.7); }
+  .article-attachments { margin-top: 30px; border-top: 1px solid #e2e8f0; padding-top: 20px; }
+  .article-attachments h3 { margin: 0 0 10px; }
+  .article-attachments li { margin: 8px 0; }
+  .article-attachments a { color: var(--blue); font-weight: 800; }
+  .visual-guide { margin-top: 34px; border-top: 1px solid #e2e8f0; padding-top: 28px; }
+  .visual-guide-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; margin-bottom: 18px; }
+  .visual-guide h3 { margin: 0; font-size: 22px; letter-spacing: -.02em; }
+  .visual-guide p { margin: 6px 0 0; color: var(--muted); }
+  .visual-guide-count { flex: 0 0 auto; border: 1px solid rgba(37,99,235,.18); background: #eff6ff; color: #1d4ed8; border-radius: 999px; padding: 7px 12px; font-size: 12px; font-weight: 900; }
+  .document-pages { display: grid; gap: 28px; }
+  .document-page { overflow: hidden; border: 1px solid rgba(148,163,184,.28); border-radius: 24px; background: #ffffff; box-shadow: 0 26px 80px -48px rgba(15,23,42,.75); }
+  .document-page-bar { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 14px 18px; background: linear-gradient(135deg,#f8fafc,#eef6ff); border-bottom: 1px solid #e2e8f0; }
+  .document-page-title { min-width: 0; }
+  .document-page-title strong { display: block; color: #0f172a; font-size: 15px; }
+  .document-page-title span { display: block; margin-top: 3px; color: #64748b; font-size: 13px; }
+  .document-page-no { flex: 0 0 auto; width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; background: linear-gradient(135deg,var(--blue),var(--violet)); color: #fff; font-weight: 950; box-shadow: 0 16px 34px -20px rgba(37,99,235,.9); }
+  .document-page-image { padding: 18px; background: #f8fafc; }
+  .document-page-image img { display: block; width: 100%; height: auto; border: 1px solid #e2e8f0; border-radius: 16px; background: #fff; }
+  .document-page-pdf { padding: 18px; background: #f8fafc; }
+  .document-page-pdf iframe { display: block; width: 100%; height: min(82vh, 880px); border: 1px solid #e2e8f0; border-radius: 16px; background: #fff; }
+  .document-page-pdf object { display: block; width: 100%; height: min(82vh, 880px); border: 1px solid #e2e8f0; border-radius: 16px; background: #fff; }
+  .document-page-pdf a { color: var(--blue); font-weight: 900; }
+  .document-page-note { padding: 0 18px 18px; color: #475569; font-size: 14px; line-height: 1.6; background: #f8fafc; }
+  .article-footer { margin-top: 32px; color: #94a3b8; font-size: 12px; text-align: center; }
+  @media (max-width: 900px) { .article-wrap { width: min(100% - 28px, 920px); } }
+  @media (max-width: 700px) { .article-wrap { width: calc(100% - 20px); padding-top: 18px; } .article-hero, .article-body { padding-left: 22px; padding-right: 22px; } .article-top { align-items: flex-start; flex-direction: column; } }
+</style>
+</head>
+<body>
+
+<div class="article-wrap">
+  <header class="article-top">
+    <div class="article-brand">
+      {% if brand_logo %}
+        <img class="article-brand-logo" src="{{ brand_logo }}" alt="{{ brand_name }}">
+      {% else %}
+        <span class="article-brand-mark" aria-hidden="true"></span>
+        <span>{{ brand_name or "Printechs Support" }}</span>
+      {% endif %}
+    </div>
+    <a class="article-back" href="/help-center">← Help Center</a>
+  </header>
+  <article class="article-card">
+    <div class="article-hero">
+      <p class="article-kicker">Help Article</p>
+      <h1 class="article-title">{{ article.title }}</h1>
+      {% if article.summary %}<p class="article-summary">{{ article.summary }}</p>{% endif %}
+      <div class="article-meta">
+        <span class="article-pill">{{ article.module_area or "General" }}</span>
+        <span class="article-pill">{{ article.category }}</span>
+        {% if article.related_doctype %}<span class="article-pill">{{ article.related_doctype }}</span>{% endif %}
+      </div>
+    </div>
+
+    <div class="article-body">
+      {% if article.video_embed_html %}
+        <div class="article-video">{{ article.video_embed_html | safe }}</div>
+      {% elif article.video_url %}
+        <p class="article-video"><a href="{{ article.video_url }}" target="_blank" rel="noopener noreferrer">Open video</a></p>
+      {% endif %}
+
+      <div class="article-content">{{ article.content | safe }}</div>
+
+      {% set ns = namespace(has_documents=false, page_count=0) %}
+      {% for att in article.attachments %}
+        {% if att.is_image or att.is_pdf %}
+          {% set ns.has_documents = true %}
+          {% set ns.page_count = ns.page_count + 1 %}
+        {% endif %}
+      {% endfor %}
+
+      {% if ns.has_documents %}
+        <section class="visual-guide">
+          <div class="visual-guide-head">
+            <div>
+              <h3>Document Guide</h3>
+              <p>Follow these screenshots and PDF documents like pages in a guidebook.</p>
+            </div>
+            <span class="visual-guide-count">{{ ns.page_count }} page(s)</span>
+          </div>
+          <div class="document-pages">
+            {% set page = namespace(no=0) %}
+            {% for att in article.attachments %}
+              {% set href = att.file or att.external_url or "" %}
+              {% if href and (att.is_image or att.is_pdf) %}
+                {% set page.no = page.no + 1 %}
+                <article class="document-page">
+                  <div class="document-page-bar">
+                    <div class="document-page-title">
+                      <strong>{{ att.attachment_title or "Page " ~ page.no }}</strong>
+                      <span>{% if att.is_pdf %}PDF document{% else %}Screenshot{% endif %} · {{ article.title }}</span>
+                    </div>
+                    <div class="document-page-no">{{ page.no }}</div>
+                  </div>
+                  {% if att.is_image %}
+                    <div class="document-page-image">
+                      <img src="{{ href }}" alt="{{ att.attachment_title or article.title }}">
+                    </div>
+                  {% elif att.is_pdf %}
+                    <div class="document-page-pdf">
+                      <iframe src="{{ href }}#toolbar=1&navpanes=0" title="{{ att.attachment_title or 'PDF Guide' }}"></iframe>
+                    </div>
+                  {% endif %}
+                  {% if att.description %}
+                    <div class="document-page-note">{{ att.description }}</div>
+                  {% elif att.is_pdf %}
+                    <div class="document-page-note">
+                      If the PDF preview does not load in your browser,
+                      <a href="{{ href }}" target="_blank" rel="noopener noreferrer">open the PDF in a new tab</a>.
+                    </div>
+                  {% endif %}
+                </article>
+              {% endif %}
+            {% endfor %}
+          </div>
+        </section>
+      {% endif %}
+
+      {% if article.attachments %}
+        <div class="article-attachments">
+          <h3>Attachments</h3>
+          <ul>
+            {% for att in article.attachments %}
+              <li>
+                {% set href = att.file or att.external_url %}
+                {% if href %}
+                  <a href="{{ href }}" target="_blank" rel="noopener noreferrer">{{ att.attachment_title or href }}</a>
+                {% else %}
+                  {{ att.attachment_title or "Attachment" }}
+                {% endif %}
+                {% if att.description %}<br><small>{{ att.description }}</small>{% endif %}
+              </li>
+            {% endfor %}
+          </ul>
+        </div>
+      {% endif %}
+    </div>
+  </article>
+  <footer class="article-footer">Printechs Help Center</footer>
+</div>
+</body>
+</html>

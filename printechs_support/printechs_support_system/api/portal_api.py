@@ -9,6 +9,7 @@ from html import escape as html_escape
 import frappe
 from frappe import _
 from frappe.auth import LoginManager
+from frappe.core.doctype.user.user import update_password
 from frappe.rate_limiter import rate_limit
 from frappe.sessions import get_csrf_token
 
@@ -179,6 +180,29 @@ def portal_login(usr: str, pwd: str):
 	return {"logged_in": True}
 
 
+@frappe.whitelist(allow_guest=True)
+@rate_limit(key="key", limit=10, seconds=15 * 60)
+def complete_portal_registration(key: str, new_password: str):
+	"""Set a new password from a reset key, then keep the user in the support portal."""
+	key = (key or "").strip()
+	if not key:
+		frappe.throw(_("Registration link is missing or invalid."), frappe.ValidationError)
+	if not new_password:
+		frappe.throw(_("New password is required."), frappe.ValidationError)
+
+	if not getattr(frappe.local, "login_manager", None):
+		frappe.local.login_manager = LoginManager()
+	redirect_url = update_password(new_password=new_password, key=key)
+	user = frappe.session.user
+	if user == "Guest":
+		frappe.throw(_("Could not complete registration. Please try the link again."), frappe.AuthenticationError)
+	if not user_can_access_support_portal(user):
+		frappe.local.login_manager.logout()
+		frappe.throw(_("This user does not have access to the support portal."), frappe.PermissionError)
+
+	return {"logged_in": True, "redirect_url": redirect_url or "/support-portal"}
+
+
 @frappe.whitelist(allow_guest=True, methods=["GET", "POST"])
 def portal_web_logout():
 	"""Used by portal ``logoutUrl()``: end session and redirect browser to the support portal shell."""
@@ -186,6 +210,14 @@ def portal_web_logout():
 	frappe.db.commit()
 	frappe.local.response["type"] = "redirect"
 	frappe.local.response["location"] = "/support-portal"
+
+
+@frappe.whitelist(allow_guest=True)
+def portal_logout():
+	"""End the current portal session for SPA logout calls."""
+	frappe.local.login_manager.logout()
+	frappe.db.commit()
+	return {"logged_out": True}
 
 
 @frappe.whitelist(allow_guest=True)
@@ -1205,6 +1237,10 @@ def get_portal_ticket(name: str):
 		"resolution_summary",
 		"resolution_type",
 		"root_cause",
+		"google_meet_url",
+		"google_meet_created_on",
+		"live_support_status",
+		"last_meet_notification_on",
 	]
 	if ticket_meta.has_field("expected_delivery_date"):
 		row_fields.insert(row_fields.index("due_date") + 1, "expected_delivery_date")
@@ -1271,6 +1307,10 @@ def get_portal_ticket(name: str):
 		"resolution_type": row.resolution_type or "",
 		"resolution_summary_html": res_html,
 		"communication_locked": comm_locked,
+		"google_meet_url": row.google_meet_url or "",
+		"google_meet_created_on": _dt(row.google_meet_created_on),
+		"live_support_status": row.live_support_status or "Not Started",
+		"last_meet_notification_on": _dt(row.last_meet_notification_on),
 	}
 	if ticket_meta.has_field("expected_delivery_date"):
 		out["expected_delivery_date"] = _dt(row.get("expected_delivery_date"))

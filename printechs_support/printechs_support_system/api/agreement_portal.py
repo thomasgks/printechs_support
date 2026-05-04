@@ -3,13 +3,14 @@
 
 """Portal user provisioning and notifications when a Support Agreement becomes Active."""
 
-from urllib.parse import quote
+from urllib.parse import parse_qs, quote, urlparse
 
 import frappe
 from frappe import _
-from frappe.utils import cint, get_url
+from frappe.utils import cint, escape_html, get_url
 
 PORTAL_ROLE = "Printechs Support Customer"
+SUPPORT_PORTAL_URL = "https://support.printechs.com/support-portal"
 
 
 def provision_agreement_portal_users(doc) -> None:
@@ -63,7 +64,7 @@ def provision_agreement_portal_users(doc) -> None:
 		if not row.invite_sent:
 			try:
 				user.reload()
-				user.reset_password(send_email=True)
+				_send_portal_welcome_email(user, doc, row)
 				row.invite_sent = 1
 			except Exception:
 				frappe.log_error(frappe.get_traceback(), "Support Agreement portal invite")
@@ -78,21 +79,27 @@ def provision_agreement_portal_users(doc) -> None:
 
 def send_agreement_active_email(doc) -> None:
 	"""Notify portal contacts that the agreement is active (print link + optional signed attachment)."""
-	subject = _("Support agreement {0} is now active").format(doc.name)
-	company = frappe.defaults.get_defaults().get("company") or frappe.db.get_single_value(
-		"Global Defaults", "default_company"
-	)
-	brand = company or frappe.get_system_settings("app_name") or "Printechs"
+	subject = _("Your Printechs support portal is ready")
+	brand = _brand_name()
+	customer = escape_html(doc.customer_name or doc.customer or "")
+	agreement_name = escape_html(doc.name)
 
 	print_url = get_url(
 		f"/printview?doctype=Support%20Agreement&name={quote(doc.name)}&format=Support%20Agreement%20Standard"
 	)
 
-	message = f"""<p>{_("Hello,")}</p>
-<p>{_("Your support agreement <b>{0}</b> for customer <b>{1}</b> is now <b>Active</b>.").format(doc.name, doc.customer_name or doc.customer)}</p>
-<p><a href="{print_url}">{_("View agreement (print/PDF)")}</a></p>
-<p>{_("If you received a separate password setup email, use it to access the support portal.")}</p>
-<p>{_("— {0}").format(brand)}</p>"""
+	message = _email_shell(
+		brand,
+		_("Your support agreement is active"),
+		f"""
+		<p style="margin:0 0 14px 0;">{_("Hello,")}</p>
+		<p style="margin:0 0 16px 0;">{_("Your support agreement")} <strong>{agreement_name}</strong> {_("for customer")} <strong>{customer}</strong> {_("is now active.")}</p>
+		<p style="margin:0 0 18px 0;">{_("You can open the Printechs Support Portal to create tickets, follow updates, and review your support activity.")}</p>
+		{_button(SUPPORT_PORTAL_URL, _("OPEN SUPPORT PORTAL"))}
+		<p style="margin:18px 0 0 0;font-size:13px;color:#64748b;">{_("Agreement copy:")} <a href="{print_url}" style="color:#1d4ed8;text-decoration:none;">{_("View agreement (print/PDF)")}</a></p>
+		<p style="margin:12px 0 0 0;font-size:13px;color:#64748b;">{_("Portal link:")} <a href="{SUPPORT_PORTAL_URL}" style="color:#1d4ed8;word-break:break-all;">{SUPPORT_PORTAL_URL}</a></p>
+		""",
+	)
 
 	recipients = list({r.email.strip().lower() for r in (doc.portal_contacts or []) if r.email})
 	if not recipients:
@@ -106,6 +113,103 @@ def send_agreement_active_email(doc) -> None:
 		message=message,
 		attachments=attachments or None,
 	)
+
+
+def _send_portal_welcome_email(user, doc, row) -> None:
+	"""Send a branded first-access email with password setup and the support portal URL."""
+	send_portal_welcome_email(
+		user,
+		customer_name=doc.customer_name or doc.customer or "",
+		full_name=row.full_name,
+	)
+
+
+def send_portal_welcome_email(user, customer_name: str | None = None, full_name: str | None = None) -> None:
+	"""Send a branded first-access email with password setup and the support portal URL."""
+	if isinstance(user, str):
+		user = frappe.get_doc("User", user)
+	user.db_set("redirect_url", SUPPORT_PORTAL_URL, update_modified=False)
+	setup_link = _portal_registration_url(user.reset_password(send_email=False))
+	brand = _brand_name()
+	first_name = escape_html(user.first_name or full_name or user.email or _("there"))
+	customer = escape_html(customer_name or _("your organization"))
+	subject = _("Welcome to the Printechs Support Portal")
+	message = _email_shell(
+		brand,
+		_("Welcome to Printechs Support"),
+		f"""
+		<p style="margin:0 0 14px 0;">{_("Hello")} {first_name},</p>
+		<p style="margin:0 0 16px 0;">{_("Your access to the Printechs Support Portal has been created for")} <strong>{customer}</strong>.</p>
+		<p style="margin:0 0 18px 0;">{_("Please set your password using the secure button below. After your password is set, you will be taken to the support portal.")}</p>
+		{_button(setup_link, _("SET PASSWORD"))}
+		<p style="margin:18px 0 0 0;font-size:13px;color:#64748b;">{_("You can use the portal to raise support tickets, track status, and view updates from our team.")}</p>
+		<p style="margin:12px 0 0 0;font-size:13px;color:#64748b;">{_("Support portal:")} <a href="{SUPPORT_PORTAL_URL}" style="color:#1d4ed8;word-break:break-all;">{SUPPORT_PORTAL_URL}</a></p>
+		<p style="margin:12px 0 0 0;font-size:12px;color:#94a3b8;">{_("If the button does not work, copy and paste this setup link into your browser:")}<br><a href="{setup_link}" style="color:#1d4ed8;word-break:break-all;">{setup_link}</a></p>
+		""",
+	)
+	frappe.sendmail(
+		recipients=[user.email],
+		subject=subject,
+		message=message,
+		now=True,
+	)
+
+
+def _brand_name() -> str:
+	company = frappe.defaults.get_defaults().get("company") or frappe.db.get_single_value(
+		"Global Defaults", "default_company"
+	)
+	return company or frappe.get_system_settings("app_name") or "Printechs"
+
+
+def _portal_registration_url(reset_link: str) -> str:
+	key = (parse_qs(urlparse(reset_link).query).get("key") or [""])[0]
+	if not key:
+		return reset_link
+	return f"{SUPPORT_PORTAL_URL}/complete-registration?key={quote(key)}"
+
+
+def _email_shell(brand: str, title: str, body: str) -> str:
+	brand = escape_html(brand)
+	title = escape_html(title)
+	return f"""
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0;padding:24px 12px;background:#f1f5f9;font-family:system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;">
+  <tr>
+    <td align="center">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:600px;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #e2e8f0;box-shadow:0 10px 40px -18px rgba(15,23,42,0.25);">
+        <tr>
+          <td style="padding:26px 30px 18px 30px;background:#0f172a;">
+            <div style="font-size:13px;font-weight:700;color:#93c5fd;letter-spacing:0.08em;text-transform:uppercase;">{brand}</div>
+            <div style="margin-top:8px;font-size:26px;font-weight:800;color:#ffffff;line-height:1.2;">{title}</div>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:26px 30px 28px 30px;font-size:15px;line-height:1.6;color:#334155;">
+            {body.strip()}
+          </td>
+        </tr>
+        <tr>
+          <td style="border-top:1px solid #e2e8f0;padding:18px 30px 22px 30px;background:#f8fafc;font-size:12px;line-height:1.5;color:#64748b;">
+            {_("Need help? Reply to this email or contact the Printechs Support team.")}
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+""".strip()
+
+
+def _button(url: str, label: str) -> str:
+	return f"""
+<table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:0;">
+  <tr>
+    <td bgcolor="#1d4ed8" style="border-radius:9px;">
+      <a href="{url}" style="display:inline-block;padding:13px 28px;font-size:14px;font-weight:800;color:#ffffff;text-decoration:none;letter-spacing:0.04em;">{escape_html(label)}</a>
+    </td>
+  </tr>
+</table>
+""".strip()
 
 
 def _signed_copy_attachments(doc):

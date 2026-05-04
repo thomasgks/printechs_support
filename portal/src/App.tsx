@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import type { PortalBootstrapResult } from "./api";
 import { getPortalBootstrap, loginUrl } from "./api";
 import AppShell from "./components/AppShell";
 import CalendarPage from "./pages/CalendarPage";
+import CompleteRegistrationPage from "./pages/CompleteRegistrationPage";
 import DashboardPage from "./pages/DashboardPage";
 import LoginPage from "./pages/LoginPage";
 import PlaceholderPage from "./pages/PlaceholderPage";
@@ -15,6 +16,8 @@ import TicketDetailPage from "./pages/TicketDetailPage";
 import TicketsPage from "./pages/TicketsPage";
 
 export default function App() {
+	const location = useLocation();
+	const isRegistrationRoute = location.pathname === "/complete-registration";
 	const [bootstrap, setBootstrap] = useState<PortalBootstrapResult | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [loading, setLoading] = useState(true);
@@ -34,8 +37,21 @@ export default function App() {
 	}, []);
 
 	useEffect(() => {
+		if (isRegistrationRoute) {
+			setLoading(false);
+			return;
+		}
 		loadBootstrap();
-	}, [loadBootstrap]);
+	}, [isRegistrationRoute, loadBootstrap]);
+
+	if (isRegistrationRoute) {
+		return (
+			<Routes>
+				<Route path="/complete-registration" element={<CompleteRegistrationPage />} />
+				<Route path="*" element={<Navigate to="/complete-registration" replace />} />
+			</Routes>
+		);
+	}
 
 	if (loading) {
 		return (

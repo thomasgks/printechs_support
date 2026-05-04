@@ -100,6 +100,14 @@
   "source_email_id",
   "last_customer_update_on",
   "last_internal_update_on",
+  "section_live_support",
+  "google_meet_url",
+  "google_meet_event_id",
+  "google_meet_created_on",
+  "column_break_live_support",
+  "google_meet_created_by",
+  "live_support_status",
+  "last_meet_notification_on",
   "section_body",
   "description",
   "section_comments",
@@ -656,6 +664,55 @@
    "fieldname": "last_internal_update_on",
    "fieldtype": "Datetime",
    "label": "Last Internal Update On"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "section_live_support",
+   "fieldtype": "Section Break",
+   "label": "Live Support Meeting"
+  },
+  {
+   "fieldname": "google_meet_url",
+   "fieldtype": "Data",
+   "label": "Google Meet URL",
+   "read_only": 1
+  },
+  {
+   "fieldname": "google_meet_event_id",
+   "fieldtype": "Data",
+   "label": "Google Meet Event ID",
+   "read_only": 1
+  },
+  {
+   "fieldname": "google_meet_created_on",
+   "fieldtype": "Datetime",
+   "label": "Google Meet Created On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_live_support",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "google_meet_created_by",
+   "fieldtype": "Link",
+   "label": "Google Meet Created By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "default": "Not Started",
+   "fieldname": "live_support_status",
+   "fieldtype": "Select",
+   "label": "Live Support Status",
+   "options": "Not Started\nMeet Link Generated\nCustomer Notified\nCompleted",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_meet_notification_on",
+   "fieldtype": "Datetime",
+   "label": "Last Meet Notification On",
+   "read_only": 1
   },
   {
    "fieldname": "section_body",

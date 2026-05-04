@@ -4,6 +4,8 @@ import CommunicationPanel from "../components/CommunicationPanel";
 import FilesPanel from "../components/FilesPanel";
 import StatusSelect from "../components/StatusSelect";
 import {
+	createGoogleMeet,
+	getContextualHelp,
 	getPortalAssignmentUsers,
 	getPortalBootstrap,
 	getPortalTeams,
@@ -11,6 +13,7 @@ import {
 	getPortalTicketStatusOptions,
 	getPortalTasksForTicket,
 	markTicketAwaitingCustomerResolution,
+	resendGoogleMeetLink,
 	updatePortalTicketDueDate,
 	updatePortalTicketStatus,
 	type PortalAssignmentUserRow,
@@ -78,6 +81,12 @@ export default function TicketDetailPage() {
 	const [dueEdit, setDueEdit] = useState("");
 	const [dueSaving, setDueSaving] = useState(false);
 	const [dueErr, setDueErr] = useState<string | null>(null);
+	const [meetBusy, setMeetBusy] = useState(false);
+	const [meetErr, setMeetErr] = useState<string | null>(null);
+	const [meetNotice, setMeetNotice] = useState<string | null>(null);
+	const [helpArticles, setHelpArticles] = useState<
+		Array<{ name: string; title: string; summary: string; has_video: boolean; attachments_count: number }>
+	>([]);
 	const [linkedTasks, setLinkedTasks] = useState<Record<string, unknown>[]>([]);
 	const [linkedTasksLoading, setLinkedTasksLoading] = useState(true);
 
@@ -100,6 +109,21 @@ export default function TicketDetailPage() {
 					setDueEdit(frappeDatetimeToDatetimeLocal(d.due_date));
 					setStatusOptions(so.options ?? []);
 					setBootstrap(b);
+					getContextualHelp({
+						module_area: "Support",
+						doctype: "Support Ticket",
+						screen: String(d.ticket_type_label || d.ticket_type || "Support Ticket"),
+						issue_type: String(d.ticket_type_label || d.ticket_type || ""),
+						search: String(d.subject || ""),
+						customer_view: b.logged_in && "internal" in b && b.internal ? 0 : 1,
+						limit: 4,
+					})
+						.then((help) => {
+							if (!c) setHelpArticles(help.articles || []);
+						})
+						.catch(() => {
+							if (!c) setHelpArticles([]);
+						});
 					if (b.logged_in && "internal" in b && b.internal) {
 						const [t, u] = await Promise.all([getPortalTeams(), getPortalAssignmentUsers()]);
 						if (!c) {
@@ -184,6 +208,44 @@ export default function TicketDetailPage() {
 	const assigneesList = Array.isArray(assigneesRaw)
 		? (assigneesRaw as unknown[]).map((x) => String(x))
 		: [];
+	const meetUrl = String(doc.google_meet_url || "").trim();
+	const liveSupportStatus = String(doc.live_support_status || "Not Started");
+
+	async function refreshTicket() {
+		const fresh = await getPortalTicket(String(doc?.name || name));
+		setDoc(fresh as Record<string, unknown>);
+		return fresh;
+	}
+
+	async function enableGoogleMeet() {
+		setMeetBusy(true);
+		setMeetErr(null);
+		setMeetNotice(null);
+		try {
+			const result = await createGoogleMeet(String(doc.name));
+			setMeetNotice(result.warning || result.message || "Google Meet link created.");
+			await refreshTicket();
+		} catch (e) {
+			setMeetErr(e instanceof Error ? e.message : "Could not create Google Meet link");
+		} finally {
+			setMeetBusy(false);
+		}
+	}
+
+	async function resendMeetLink() {
+		setMeetBusy(true);
+		setMeetErr(null);
+		setMeetNotice(null);
+		try {
+			const result = await resendGoogleMeetLink(String(doc.name));
+			setMeetNotice(result.warning || result.message || "Google Meet link resent.");
+			await refreshTicket();
+		} catch (e) {
+			setMeetErr(e instanceof Error ? e.message : "Could not resend Google Meet link");
+		} finally {
+			setMeetBusy(false);
+		}
+	}
 
 	return (
 		<div className="page-grid mx-auto w-full max-w-screen-2xl gap-8">
@@ -322,6 +384,104 @@ export default function TicketDetailPage() {
 					</div>
 				</div>
 			</section>
+
+			<section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-saas">
+				<div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+					<div>
+						<p className="text-xs font-bold uppercase tracking-[0.18em] text-violet-600">Knowledge Base</p>
+						<h2 className="font-['Syne',system-ui,sans-serif] text-lg font-bold text-slate-900">
+							Help / Knowledge Base
+						</h2>
+					</div>
+					<a href="/help-center" className="text-sm font-semibold text-indigo-700 hover:underline">
+						Open Help Center
+					</a>
+				</div>
+				{helpArticles.length ? (
+					<div className="grid gap-3 md:grid-cols-2">
+						{helpArticles.map((article) => (
+							<a
+								key={article.name}
+								href={`/help-article/${encodeURIComponent(article.name)}`}
+								className="rounded-2xl border border-slate-100 bg-slate-50/80 p-4 text-slate-800 shadow-sm transition hover:border-indigo-200 hover:bg-indigo-50/60"
+							>
+								<div className="font-semibold text-slate-900">{article.title}</div>
+								{article.summary ? <p className="mt-1 text-sm text-slate-600">{article.summary}</p> : null}
+								<p className="mt-2 text-xs font-semibold text-slate-500">
+									{article.has_video ? "Video" : "Article"}
+									{article.attachments_count ? ` · ${article.attachments_count} attachment(s)` : ""}
+								</p>
+							</a>
+						))}
+					</div>
+				) : (
+					<p className="text-sm text-slate-600">
+						No contextual articles found yet. Use the Help Center to browse all public guides.
+					</p>
+				)}
+			</section>
+
+			{internal || meetUrl ? (
+				<section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-saas">
+					<div className="flex flex-wrap items-start justify-between gap-4">
+						<div>
+							<p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600">Live Support Meeting</p>
+							<h2 className="mt-1 font-['Syne',system-ui,sans-serif] text-lg font-bold text-slate-900">
+								Google Meet
+							</h2>
+							<p className="mt-2 text-sm text-slate-600">
+								{meetUrl
+									? "This meeting opens securely in Google Meet in a new tab."
+									: "Generate a unique Google Meet link for this ticket and notify the customer."}
+							</p>
+							<p className="mt-3 text-sm">
+								<span className="font-semibold text-slate-700">Status:</span>{" "}
+								<span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700 ring-1 ring-blue-100">
+									{meetUrl ? liveSupportStatus || "Meet Link Generated" : "Not Started"}
+								</span>
+							</p>
+							{fmtPortalDateTime(doc.last_meet_notification_on) ? (
+								<p className="mt-2 text-xs text-slate-500">
+									Last customer notification: {fmtPortalDateTime(doc.last_meet_notification_on)}
+								</p>
+							) : null}
+						</div>
+						<div className="flex flex-wrap gap-2">
+							{meetUrl ? (
+								<a
+									href={meetUrl}
+									target="_blank"
+									rel="noopener noreferrer"
+									className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-blue-700"
+								>
+									Join Google Meet
+								</a>
+							) : internal ? (
+								<button
+									type="button"
+									className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-blue-700 disabled:opacity-60"
+									disabled={meetBusy}
+									onClick={enableGoogleMeet}
+								>
+									{meetBusy ? "Creating…" : "Enable Google Meet"}
+								</button>
+							) : null}
+							{internal && meetUrl ? (
+								<button
+									type="button"
+									className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-60"
+									disabled={meetBusy}
+									onClick={resendMeetLink}
+								>
+									{meetBusy ? "Sending…" : "Resend Meet Link"}
+								</button>
+							) : null}
+						</div>
+					</div>
+					{meetErr ? <p className="mt-3 text-sm font-semibold text-red-600">{meetErr}</p> : null}
+					{meetNotice ? <p className="mt-3 text-sm font-semibold text-slate-600">{meetNotice}</p> : null}
+				</section>
+			) : null}
 
 			<section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-saas">
 				<h2 className="mb-4 font-['Syne',system-ui,sans-serif] text-lg font-bold text-slate-900">Details</h2>

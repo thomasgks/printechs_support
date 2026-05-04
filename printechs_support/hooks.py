@@ -26,7 +26,7 @@ app_license = "mit"
 
 # include js, css files in header of desk.html
 # app_include_css = "/assets/printechs_support/css/printechs_support.css"
-# app_include_js = "/assets/printechs_support/js/printechs_support.js"
+app_include_js = "/assets/printechs_support/js/help_widget.js"
 
 # include js, css files in header of web template
 # web_include_css = "/assets/printechs_support/css/printechs_support.css"
@@ -63,6 +63,8 @@ doctype_js = {
 # (same pattern as Frappe core: /app/<path:app_path> → app).
 website_route_rules = [
 	{"from_route": "/support-portal/<path:app_path>", "to_route": "support-portal"},
+	{"from_route": "/help-center/<path:category>", "to_route": "help-center"},
+	{"from_route": "/help-article/<path:article_name>", "to_route": "help-article"},
 ]
 
 # application home page (will override Website Settings)
@@ -132,11 +134,13 @@ after_migrate = ["printechs_support.install.after_migrate"]
 permission_query_conditions = {
 	"Support Ticket": "printechs_support.permissions.support_ticket_permission_query_conditions",
 	"Support Task": "printechs_support.permissions.support_task_permission_query_conditions",
+	"Help Article": "printechs_support.permissions.help_article_permission_query_conditions",
 }
 
 has_permission = {
 	"Support Ticket": "printechs_support.permissions.support_ticket_has_permission",
 	"Support Task": "printechs_support.permissions.support_task_has_permission",
+	"Help Article": "printechs_support.permissions.help_article_has_permission",
 }
 
 # DocType Class
@@ -151,13 +155,12 @@ override_doctype_class = {
 # ---------------
 # Hook on document methods and events
 
-# doc_events = {
-# 	"*": {
-# 		"on_update": "method",
-# 		"on_cancel": "method",
-# 		"on_trash": "method"
-# 	}
-# }
+doc_events = {
+	"User": {
+		"before_insert": "printechs_support.printechs_support_system.api.user_hooks.before_insert_user",
+		"after_insert": "printechs_support.printechs_support_system.api.user_hooks.after_insert_user",
+	}
+}
 
 # Scheduled Tasks
 # ---------------

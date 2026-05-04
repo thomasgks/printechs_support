@@ -12,6 +12,7 @@ PORTAL_MODULE = "printechs_support.printechs_support_system.api.portal_api"
 _PORTAL_RPC_METHODS = (
 	"get_portal_csrf_token",
 	"portal_web_logout",
+	"portal_logout",
 	"get_portal_bootstrap",
 	"get_portal_tickets",
 	"get_portal_tasks",
