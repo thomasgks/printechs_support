@@ -132,6 +132,7 @@ export type PortalBootstrapResult =
 			full_name: string;
 			customers: string[];
 			internal: boolean;
+			help_url: string;
 	  };
 
 export async function callMethod<T>(method: string, args: Record<string, unknown> = {}): Promise<T> {

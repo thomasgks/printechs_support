@@ -220,6 +220,18 @@ def portal_logout():
 	return {"logged_out": True}
 
 
+def _portal_help_url() -> str:
+	try:
+		url = (frappe.db.get_single_value("Printechs Support Settings", "help_url") or "").strip()
+	except Exception:
+		url = ""
+	if not url:
+		return "/help-center"
+	if url.startswith(("http://", "https://", "/")):
+		return url
+	return f"/{url}"
+
+
 @frappe.whitelist(allow_guest=True)
 def get_portal_bootstrap():
 	"""Called on SPA load; guests must be allowed so we can show sign-in (not a misleading 'not whitelisted' error)."""
@@ -237,6 +249,7 @@ def get_portal_bootstrap():
 		"full_name": full_name,
 		"customers": customers,
 		"internal": internal,
+		"help_url": _portal_help_url(),
 	}
 
 

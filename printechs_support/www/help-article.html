@@ -112,7 +112,7 @@
 
     <div class="article-body">
       {% if article.video_embed_html %}
-        <div class="article-video">{{ article.video_embed_html | safe }}</div>
+        <div class="article-video">{{ article.video_embed_html | replace('&lt;', '<') | replace('&gt;', '>') | replace('&amp;', '&') | safe }}</div>
       {% elif article.video_url %}
         <p class="article-video"><a href="{{ article.video_url }}" target="_blank" rel="noopener noreferrer">Open video</a></p>
       {% endif %}

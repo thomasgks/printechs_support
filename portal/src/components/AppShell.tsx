@@ -83,7 +83,7 @@ const nav = [
 	{ to: "/calendar", label: "Calendar", icon: "calendar" },
 	{ to: "/reports", label: "Reports", icon: "report" },
 	{ to: "/customers", label: "Customers", icon: "users" },
-	{ href: "/help-center", label: "Help Center", icon: "help" },
+	{ href: "__HELP_URL__", label: "Help", icon: "help" },
 	{ to: "/settings", label: "Settings", icon: "settings" },
 ] as const;
 
@@ -124,7 +124,13 @@ export default function AppShell({ bootstrap, children }: ShellProps) {
 				<nav className="app-sidebar-nav">
 					{nav.map((item) => (
 						"href" in item ? (
-							<a key={item.href} href={item.href} className="sidebar-link flex items-center gap-2">
+							<a
+								key={item.href}
+								href={item.href === "__HELP_URL__" ? bootstrap.help_url || "/help-center" : item.href}
+								target="_blank"
+								rel="noopener noreferrer"
+								className="sidebar-link flex items-center gap-2"
+							>
 								<NavIcon name={item.icon} />
 								<span>{item.label}</span>
 							</a>

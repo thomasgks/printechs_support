@@ -10,7 +10,8 @@
   "default_holiday_list",
   "column_break_1",
   "fallback_customer",
-  "section_email"
+  "section_email",
+  "help_url"
  ],
  "fields": [
   {
@@ -52,6 +53,13 @@
    "fieldname": "section_email",
    "fieldtype": "Section Break",
    "label": "Email"
+  },
+  {
+   "default": "/help-center",
+   "description": "URL used by the Support Portal Help Center link. Use a relative path like /help-center or a full https:// URL.",
+   "fieldname": "help_url",
+   "fieldtype": "Data",
+   "label": "Help URL"
   }
  ],
  "issingle": 1,

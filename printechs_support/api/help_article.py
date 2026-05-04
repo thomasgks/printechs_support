@@ -190,7 +190,7 @@ def get_help_article_detail(name=None, customer_view=0):
 			"keywords": doc.keywords or "",
 			"content": sanitize_html(doc.content or ""),
 			"video_url": doc.video_url or "",
-			"video_embed_html": sanitize_html(doc.video_embed_html or ""),
+			"video_embed_html": doc.video_embed_html or "",
 			"attachments": _attachment_rows(doc),
 		},
 	}

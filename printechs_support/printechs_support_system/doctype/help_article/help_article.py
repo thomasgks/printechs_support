@@ -32,8 +32,6 @@ class HelpArticle(Document):
 
 	def _sanitize_content(self):
 		self.content = sanitize_html(self.content or "")
-		if self.video_embed_html:
-			self.video_embed_html = sanitize_html(self.video_embed_html)
 
 	def _set_video_embed(self):
 		url = (self.video_url or "").strip()
@@ -95,7 +93,8 @@ def _iframe(src: str, title: str = "Help video") -> str:
 		f'<iframe src="{quote(src, safe=":/?&=#%.+-_")}" title="{frappe.utils.escape_html(title)}" '
 		'style="width:100%;min-height:360px;border:0;border-radius:12px;" '
 		'allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" '
-		'allowfullscreen loading="lazy"></iframe></div>'
+		'sandbox="allow-scripts allow-same-origin allow-presentation" '
+		'referrerpolicy="strict-origin-when-cross-origin" allowfullscreen loading="lazy"></iframe></div>'
 	)
 
 
@@ -109,11 +108,17 @@ def _video_embed_html(url: str) -> str:
 		if not video_id and path.startswith("/shorts/"):
 			video_id = path.split("/", 2)[2].split("/")[0]
 		if video_id:
-			return _iframe(f"https://www.youtube.com/embed/{video_id}", "YouTube video")
+			return _iframe(
+				f"https://www.youtube-nocookie.com/embed/{video_id}?rel=0&modestbranding=1&playsinline=1",
+				"YouTube video",
+			)
 	if "youtu.be" in host:
 		video_id = path.strip("/").split("/")[0]
 		if video_id:
-			return _iframe(f"https://www.youtube.com/embed/{video_id}", "YouTube video")
+			return _iframe(
+				f"https://www.youtube-nocookie.com/embed/{video_id}?rel=0&modestbranding=1&playsinline=1",
+				"YouTube video",
+			)
 	if "vimeo.com" in host:
 		video_id = path.strip("/").split("/")[0]
 		if video_id:
