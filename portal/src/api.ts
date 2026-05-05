@@ -133,6 +133,8 @@ export type PortalBootstrapResult =
 			customers: string[];
 			internal: boolean;
 			help_url: string;
+			brand_logo?: string;
+			brand_name?: string;
 	  };
 
 export async function callMethod<T>(method: string, args: Record<string, unknown> = {}): Promise<T> {

@@ -10,7 +10,7 @@ from frappe import _
 from frappe.utils import cint, escape_html, get_url
 
 PORTAL_ROLE = "Printechs Support Customer"
-SUPPORT_PORTAL_URL = "https://support.printechs.com/support-portal"
+SUPPORT_PORTAL_PATH = "/support-portal"
 
 
 def provision_agreement_portal_users(doc) -> None:
@@ -83,6 +83,7 @@ def send_agreement_active_email(doc) -> None:
 	brand = _brand_name()
 	customer = escape_html(doc.customer_name or doc.customer or "")
 	agreement_name = escape_html(doc.name)
+	support_portal_url = _support_portal_url()
 
 	print_url = get_url(
 		f"/printview?doctype=Support%20Agreement&name={quote(doc.name)}&format=Support%20Agreement%20Standard"
@@ -95,9 +96,9 @@ def send_agreement_active_email(doc) -> None:
 		<p style="margin:0 0 14px 0;">{_("Hello,")}</p>
 		<p style="margin:0 0 16px 0;">{_("Your support agreement")} <strong>{agreement_name}</strong> {_("for customer")} <strong>{customer}</strong> {_("is now active.")}</p>
 		<p style="margin:0 0 18px 0;">{_("You can open the Printechs Support Portal to create tickets, follow updates, and review your support activity.")}</p>
-		{_button(SUPPORT_PORTAL_URL, _("OPEN SUPPORT PORTAL"))}
+		{_button(support_portal_url, _("OPEN SUPPORT PORTAL"))}
 		<p style="margin:18px 0 0 0;font-size:13px;color:#64748b;">{_("Agreement copy:")} <a href="{print_url}" style="color:#1d4ed8;text-decoration:none;">{_("View agreement (print/PDF)")}</a></p>
-		<p style="margin:12px 0 0 0;font-size:13px;color:#64748b;">{_("Portal link:")} <a href="{SUPPORT_PORTAL_URL}" style="color:#1d4ed8;word-break:break-all;">{SUPPORT_PORTAL_URL}</a></p>
+		<p style="margin:12px 0 0 0;font-size:13px;color:#64748b;">{_("Portal link:")} <a href="{support_portal_url}" style="color:#1d4ed8;text-decoration:none;">{support_portal_url}</a></p>
 		""",
 	)
 
@@ -128,7 +129,8 @@ def send_portal_welcome_email(user, customer_name: str | None = None, full_name:
 	"""Send a branded first-access email with password setup and the support portal URL."""
 	if isinstance(user, str):
 		user = frappe.get_doc("User", user)
-	user.db_set("redirect_url", SUPPORT_PORTAL_URL, update_modified=False)
+	support_portal_url = _support_portal_url()
+	user.db_set("redirect_url", support_portal_url, update_modified=False)
 	setup_link = _portal_registration_url(user.reset_password(send_email=False))
 	brand = _brand_name()
 	first_name = escape_html(user.first_name or full_name or user.email or _("there"))
@@ -143,8 +145,8 @@ def send_portal_welcome_email(user, customer_name: str | None = None, full_name:
 		<p style="margin:0 0 18px 0;">{_("Please set your password using the secure button below. After your password is set, you will be taken to the support portal.")}</p>
 		{_button(setup_link, _("SET PASSWORD"))}
 		<p style="margin:18px 0 0 0;font-size:13px;color:#64748b;">{_("You can use the portal to raise support tickets, track status, and view updates from our team.")}</p>
-		<p style="margin:12px 0 0 0;font-size:13px;color:#64748b;">{_("Support portal:")} <a href="{SUPPORT_PORTAL_URL}" style="color:#1d4ed8;word-break:break-all;">{SUPPORT_PORTAL_URL}</a></p>
-		<p style="margin:12px 0 0 0;font-size:12px;color:#94a3b8;">{_("If the button does not work, copy and paste this setup link into your browser:")}<br><a href="{setup_link}" style="color:#1d4ed8;word-break:break-all;">{setup_link}</a></p>
+		<p style="margin:12px 0 0 0;font-size:13px;color:#64748b;">{_("Support portal:")} <a href="{support_portal_url}" style="color:#1d4ed8;text-decoration:none;">{support_portal_url}</a></p>
+		<p style="margin:12px 0 0 0;font-size:12px;color:#94a3b8;">{_("If the button does not work, copy and paste this setup link into your browser:")}<br><a href="{setup_link}" style="color:#1d4ed8;text-decoration:none;">{setup_link}</a></p>
 		""",
 	)
 	frappe.sendmail(
@@ -162,11 +164,15 @@ def _brand_name() -> str:
 	return company or frappe.get_system_settings("app_name") or "Printechs"
 
 
+def _support_portal_url() -> str:
+	return get_url(SUPPORT_PORTAL_PATH)
+
+
 def _portal_registration_url(reset_link: str) -> str:
 	key = (parse_qs(urlparse(reset_link).query).get("key") or [""])[0]
 	if not key:
 		return reset_link
-	return f"{SUPPORT_PORTAL_URL}/complete-registration?key={quote(key)}"
+	return f"{_support_portal_url()}/complete-registration?key={quote(key)}"
 
 
 def _email_shell(brand: str, title: str, body: str) -> str:
@@ -176,7 +182,7 @@ def _email_shell(brand: str, title: str, body: str) -> str:
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0;padding:24px 12px;background:#f1f5f9;font-family:system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;">
   <tr>
     <td align="center">
-      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:600px;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #e2e8f0;box-shadow:0 10px 40px -18px rgba(15,23,42,0.25);">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:600px;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #e2e8f0;">
         <tr>
           <td style="padding:26px 30px 18px 30px;background:#0f172a;">
             <div style="font-size:13px;font-weight:700;color:#93c5fd;letter-spacing:0.08em;text-transform:uppercase;">{brand}</div>

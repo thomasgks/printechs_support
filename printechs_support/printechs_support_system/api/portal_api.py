@@ -25,6 +25,7 @@ from frappe.utils import (
 	strip_html,
 	today,
 )
+from frappe.utils.data import sha256_hash
 from frappe.utils.file_manager import save_file
 from werkzeug.utils import secure_filename
 
@@ -190,10 +191,22 @@ def complete_portal_registration(key: str, new_password: str):
 	if not new_password:
 		frappe.throw(_("New password is required."), frappe.ValidationError)
 
+	reset_user = frappe.db.get_value("User", {"reset_password_key": sha256_hash(key), "enabled": 1}, "name")
+	if not reset_user:
+		frappe.throw(
+			_("This registration link has expired or was already used. Please request a new welcome email."),
+			frappe.ValidationError,
+		)
+	if reset_user and not user_can_access_support_portal(reset_user):
+		frappe.throw(_("This user does not have access to the support portal."), frappe.PermissionError)
+
 	if not getattr(frappe.local, "login_manager", None):
 		frappe.local.login_manager = LoginManager()
 	redirect_url = update_password(new_password=new_password, key=key)
 	user = frappe.session.user
+	if user == "Guest" and reset_user:
+		frappe.local.login_manager.login_as(reset_user)
+		user = frappe.session.user
 	if user == "Guest":
 		frappe.throw(_("Could not complete registration. Please try the link again."), frappe.AuthenticationError)
 	if not user_can_access_support_portal(user):
@@ -232,6 +245,23 @@ def _portal_help_url() -> str:
 	return f"/{url}"
 
 
+def _portal_brand_context() -> dict[str, str]:
+	logo = ""
+	try:
+		from frappe.core.doctype.navbar_settings.navbar_settings import get_app_logo
+
+		logo = get_app_logo() or ""
+	except Exception:
+		logo = ""
+
+	brand_name = (
+		frappe.db.get_single_value("Global Defaults", "default_company")
+		or frappe.get_system_settings("app_name")
+		or "Printechs Support"
+	)
+	return {"brand_logo": logo, "brand_name": brand_name}
+
+
 @frappe.whitelist(allow_guest=True)
 def get_portal_bootstrap():
 	"""Called on SPA load; guests must be allowed so we can show sign-in (not a misleading 'not whitelisted' error)."""
@@ -242,6 +272,7 @@ def get_portal_bootstrap():
 	full_name = frappe.db.get_value("User", user, "full_name") or user
 	customers = get_allowed_customers(user)
 	internal = user_sees_all_support_records(user)
+	brand = _portal_brand_context()
 
 	return {
 		"logged_in": True,
@@ -250,6 +281,8 @@ def get_portal_bootstrap():
 		"customers": customers,
 		"internal": internal,
 		"help_url": _portal_help_url(),
+		"brand_logo": brand["brand_logo"],
+		"brand_name": brand["brand_name"],
 	}
 
 

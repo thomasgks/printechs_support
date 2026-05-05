@@ -115,9 +115,13 @@ export default function AppShell({ bootstrap, children }: ShellProps) {
 				aria-label="Primary navigation"
 			>
 				<div className="app-sidebar-brand">
-					<span className="shell-brand-mark" aria-hidden />
+					{bootstrap.brand_logo ? (
+						<img className="shell-brand-logo" src={bootstrap.brand_logo} alt={bootstrap.brand_name || "Printechs Support"} />
+					) : (
+						<span className="shell-brand-mark" aria-hidden />
+					)}
 					<div className="min-w-0">
-						<h1 className="shell-title truncate">Support</h1>
+						<h1 className="shell-title truncate">{bootstrap.brand_name || "Support"}</h1>
 						<p className="shell-sub truncate">{bootstrap.full_name}</p>
 					</div>
 				</div>
