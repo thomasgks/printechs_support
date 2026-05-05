@@ -147,7 +147,7 @@ def _attachment_rows(doc) -> list[dict]:
 				"attachment_title": row.attachment_title or "",
 				"file": row.file or "",
 				"external_url": row.external_url or "",
-				"description": row.description or "",
+				"description": sanitize_html(row.description or ""),
 				"is_image": lower_href.endswith((".png", ".jpg", ".jpeg", ".gif", ".webp")),
 				"is_pdf": lower_href.endswith(".pdf"),
 			}
