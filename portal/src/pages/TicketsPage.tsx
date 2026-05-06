@@ -2,6 +2,11 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { getPortalTickets, portalTicketNewPath, portalTicketPath } from "../api";
 
+function fmtListDateTime(v: unknown): string {
+	const s = String(v ?? "").trim();
+	return s ? s.slice(0, 16) : "—";
+}
+
 export default function TicketsPage() {
 	const [searchParams, setSearchParams] = useSearchParams();
 	const qFromUrl = (searchParams.get("q") ?? "").trim();
@@ -164,6 +169,7 @@ export default function TicketsPage() {
 								<th>Customer</th>
 								<th>Status</th>
 								<th>Priority</th>
+								<th>Due Date</th>
 								<th>Updated</th>
 							</tr>
 						</thead>
@@ -181,7 +187,8 @@ export default function TicketsPage() {
 										<span className="pill">{String(r.status ?? "")}</span>
 									</td>
 									<td>{String(r.priority ?? "—")}</td>
-									<td className="muted">{String(r.modified ?? "").slice(0, 16)}</td>
+									<td className="muted">{fmtListDateTime(r.due_date)}</td>
+									<td className="muted">{fmtListDateTime(r.modified)}</td>
 								</tr>
 							))}
 						</tbody>
