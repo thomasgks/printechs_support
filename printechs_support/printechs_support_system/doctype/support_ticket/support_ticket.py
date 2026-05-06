@@ -24,6 +24,12 @@ from printechs_support.printechs_support_system.api.ticket_workflow import (
 	validate_workflow_consistency,
 )
 
+_DIVISION_TICKET_SERIES = {
+	"Software": "SOF-TKT-.YYYY.-.#####",
+	"Industrial": "IND-TKT-.YYYY.-.#####",
+	"Retail": "RET-TKT-.YYYY.-.#####",
+}
+
 
 class SupportTicket(Document):
 	def after_insert(self):
@@ -194,6 +200,8 @@ class SupportTicket(Document):
 			)
 
 	def before_insert(self):
+		self._apply_ticket_type_defaults()
+		self._set_division_naming_series()
 		if not self.opening_date:
 			self.opening_date = now_datetime()
 		user = frappe.session.user
@@ -231,19 +239,28 @@ class SupportTicket(Document):
 			self.channel = "Email"
 			if not self.source_email_id:
 				self.source_email_id = self.contact_email
-		if self.ticket_type:
-			tt = frappe.db.get_value(
-				"Support Ticket Type",
-				self.ticket_type,
-				["default_priority", "default_team"],
-				as_dict=True,
-			)
-			if tt:
-				# Portal create passes explicit priority; do not override when flagged.
-				if tt.default_priority and not self.flags.get("priority_from_portal"):
-					self.priority = tt.default_priority
-				if tt.default_team and not self.team:
-					self.team = tt.default_team
+	def _apply_ticket_type_defaults(self):
+		if not self.ticket_type:
+			return
+		tt = frappe.db.get_value(
+			"Support Ticket Type",
+			self.ticket_type,
+			["division", "default_priority", "default_team"],
+			as_dict=True,
+		)
+		if not tt:
+			return
+		if tt.division:
+			self.division = tt.division
+		# Portal create passes explicit priority; do not override when flagged.
+		if tt.default_priority and not self.flags.get("priority_from_portal"):
+			self.priority = tt.default_priority
+		if tt.default_team and not self.team:
+			self.team = tt.default_team
+
+	def _set_division_naming_series(self):
+		division = (self.division or "Software").strip()
+		self.naming_series = _DIVISION_TICKET_SERIES.get(division, _DIVISION_TICKET_SERIES["Software"])
 
 	def validate_portal_customer_status_change(self):
 		"""Block portal customers from changing status except Resolved during an open confirmation window."""

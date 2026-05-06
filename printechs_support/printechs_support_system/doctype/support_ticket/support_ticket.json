@@ -123,7 +123,7 @@
    "fieldname": "naming_series",
    "fieldtype": "Select",
    "label": "Series",
-   "options": "SUP-TKT-.YYYY.-.#####",
+   "options": "SOF-TKT-.YYYY.-.#####\nIND-TKT-.YYYY.-.#####\nRET-TKT-.YYYY.-.#####",
    "reqd": 1,
    "no_copy": 1,
    "set_only_once": 1,

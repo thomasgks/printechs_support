@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import CommunicationPanel from "../components/CommunicationPanel";
 import FilesPanel from "../components/FilesPanel";
 import StatusSelect from "../components/StatusSelect";
@@ -69,6 +69,7 @@ function datetimeLocalToFrappePayload(v: string): string | null {
 
 export default function TicketDetailPage() {
 	const { ticketId } = useParams();
+	const navigate = useNavigate();
 	const name = ticketId ? decodeURIComponent(ticketId) : "";
 	const [doc, setDoc] = useState<Record<string, unknown> | null>(null);
 	const [statusOptions, setStatusOptions] = useState<string[]>([]);
@@ -636,6 +637,7 @@ export default function TicketDetailPage() {
 					users={assignUsers}
 					onUpdated={(patch) => {
 						setDoc((prev) => (prev ? { ...prev, ...patch } : prev));
+						navigate("/tickets", { replace: true });
 					}}
 				/>
 			) : null}

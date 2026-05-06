@@ -652,7 +652,6 @@ def create_portal_ticket(
 	initial_status = get_initial_support_ticket_status()
 	row = {
 		"doctype": "Support Ticket",
-		"naming_series": "SUP-TKT-.YYYY.-.#####",
 		"subject": subject,
 		"ticket_type": tt,
 		"priority": priority,

@@ -5,7 +5,6 @@ import {
 	getPortalBootstrap,
 	getPortalTicketCustomers,
 	getPortalTicketTypes,
-	portalTicketPath,
 	type PortalBootstrapResult,
 	type PortalTicketCustomerRow,
 	type PortalTicketTypeRow,
@@ -154,7 +153,7 @@ export default function CreateTicketPage() {
 		}
 		setSaving(true);
 		try {
-			const res = await createPortalTicket({
+			await createPortalTicket({
 				subject: sub,
 				description: description.trim() || undefined,
 				priority,
@@ -162,7 +161,7 @@ export default function CreateTicketPage() {
 				ticket_type: tt,
 				...(internal && workScope === "internal" ? { work_scope: "Internal" as const } : {}),
 			});
-			navigate(portalTicketPath(res.name), { replace: true });
+			navigate("/tickets", { replace: true });
 		} catch (e) {
 			const msg = e instanceof Error ? e.message : "Could not create ticket";
 			setErr(
