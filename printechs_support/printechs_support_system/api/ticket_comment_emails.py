@@ -33,7 +33,7 @@ def _user_email(user_name: str | None) -> str | None:
 
 
 def _collect_team_emails(ticket) -> list[str]:
-	"""Team lead + primary assignee + ticket assignee table (deduped)."""
+	"""Team lead/default email + team members + ticket assignees (deduped)."""
 	out: set[str] = set()
 	team = getattr(ticket, "team", None)
 	if team:
@@ -48,6 +48,14 @@ def _collect_team_emails(ticket) -> list[str]:
 				e = _normalize_email(row.get(key))
 				if e:
 					out.add(e)
+		for member in frappe.get_all(
+			"Support Team Member",
+			filters={"parent": team, "parenttype": "Support Team"},
+			pluck="user",
+		):
+			e = _user_email(member)
+			if e:
+				out.add(e)
 	assigned = getattr(ticket, "assigned_to", None)
 	if assigned:
 		e = _user_email(assigned)
@@ -128,7 +136,6 @@ def notify_ticket_comment(
 			author=author_name,
 			body_text=body_preview,
 			link=link,
-			ticket_description_html=ticket_desc_html,
 		)
 		_send_bulk(recipients, subj, msg, ticket_name)
 		return
