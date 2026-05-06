@@ -16,13 +16,34 @@ _TERMINAL_TICKET_STATUSES = frozenset({"Resolved", "Closed", "Cancelled"})
 def auto_resolve_support_tickets_past_deadline():
 	"""Mark tickets Resolved when customer confirmation window expired (hourly scheduler)."""
 	now = now_datetime()
-	rows = frappe.get_all(
-		"Support Ticket",
-		filters={
-			"customer_resolution_deadline": ["<", now],
-			"status": ["not in", list(_TERMINAL_TICKET_STATUSES)],
-		},
-		fields=["name", "status"],
+	rows = frappe.db.sql(
+		"""
+		SELECT st.name, st.status
+		FROM `tabSupport Ticket` st
+		WHERE st.customer_resolution_deadline < %(now)s
+			AND IFNULL(st.customer_confirmation_required, 0) = 1
+			AND st.action_required_from = 'Customer'
+			AND st.status NOT IN %(terminal_statuses)s
+			AND (
+				IFNULL(st.team, '') != ''
+				OR IFNULL(st.assigned_to, '') != ''
+				OR EXISTS (
+					SELECT 1
+					FROM `tabSupport Ticket Assignee` ta
+					WHERE ta.parent = st.name
+						AND ta.parenttype = 'Support Ticket'
+						AND IFNULL(ta.user, '') != ''
+				)
+			)
+			AND (st.due_date IS NOT NULL OR st.resolution_due IS NOT NULL)
+			AND (
+				st.last_technician_reply_on IS NOT NULL
+				OR st.last_internal_update_on IS NOT NULL
+				OR st.resolved_on IS NOT NULL
+			)
+		""",
+		{"now": now, "terminal_statuses": tuple(_TERMINAL_TICKET_STATUSES)},
+		as_dict=True,
 	)
 	for row in rows:
 		name = row.name

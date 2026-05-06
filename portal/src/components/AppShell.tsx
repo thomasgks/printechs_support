@@ -79,16 +79,17 @@ const nav = [
 	{ to: "/", end: true, label: "Dashboard", icon: "dashboard" },
 	{ to: "/tickets", label: "Tickets", icon: "ticket" },
 	{ to: "/tasks", label: "Tasks", icon: "task" },
-	{ to: "/projects", label: "Projects", icon: "project" },
+	{ to: "/projects", label: "Projects", icon: "project", internalOnly: true },
 	{ to: "/calendar", label: "Calendar", icon: "calendar" },
-	{ to: "/reports", label: "Reports", icon: "report" },
-	{ to: "/customers", label: "Customers", icon: "users" },
+	{ to: "/reports", label: "Reports", icon: "report", internalOnly: true },
+	{ to: "/customers", label: "Customers", icon: "users", internalOnly: true },
 	{ href: "__HELP_URL__", label: "Help", icon: "help" },
-	{ to: "/settings", label: "Settings", icon: "settings" },
+	{ to: "/settings", label: "Settings", icon: "settings", internalOnly: true },
 ] as const;
 
 export default function AppShell({ bootstrap, children }: ShellProps) {
 	const [signingOut, setSigningOut] = useState(false);
+	const visibleNav = nav.filter((item) => !("internalOnly" in item) || !item.internalOnly || bootstrap.internal);
 	const initial = (bootstrap.full_name || bootstrap.user || "?")
 		.split(/\s+/)
 		.map((s) => s[0])
@@ -126,7 +127,7 @@ export default function AppShell({ bootstrap, children }: ShellProps) {
 					</div>
 				</div>
 				<nav className="app-sidebar-nav">
-					{nav.map((item) => (
+					{visibleNav.map((item) => (
 						"href" in item ? (
 							<a
 								key={item.href}

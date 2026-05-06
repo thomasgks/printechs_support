@@ -35,6 +35,10 @@ class TestTicketResolution(FrappeTestCase):
 				{
 					"customer_resolution_deadline": past,
 					"customer_confirmation_required": 1,
+					"action_required_from": "Customer",
+					"assigned_to": "Administrator",
+					"due_date": now_datetime(),
+					"last_internal_update_on": now_datetime(),
 				},
 			)
 			auto_resolve_support_tickets_past_deadline()
@@ -46,6 +50,42 @@ class TestTicketResolution(FrappeTestCase):
 			)
 			self.assertEqual(row.status, "Resolved")
 			self.assertIsNone(row.customer_resolution_deadline)
+			self.assertEqual(row.customer_confirmation_required, 0)
+		finally:
+			frappe.set_user("Administrator")
+
+	def test_auto_resolve_ignores_deadline_without_confirmation_flag(self):
+		frappe.set_user("Administrator")
+		try:
+			customer = _get_or_create_test_customer()
+			ticket_type = _get_or_create_ticket_type()
+			tag = frappe.generate_hash(length=8)
+			created = portal_api.create_portal_ticket(
+				subject=f"[Auto-test] Ignore stale deadline {tag}",
+				description="<p>Should stay open.</p>",
+				priority="Medium",
+				customer=customer,
+				ticket_type=ticket_type,
+			)
+			name = created["name"]
+			past = add_to_date(now_datetime(), hours=-1)
+			frappe.db.set_value(
+				"Support Ticket",
+				name,
+				{
+					"customer_resolution_deadline": past,
+					"customer_confirmation_required": 0,
+					"action_required_from": "Technician",
+				},
+			)
+			auto_resolve_support_tickets_past_deadline()
+			row = frappe.db.get_value(
+				"Support Ticket",
+				name,
+				["status", "customer_resolution_deadline", "customer_confirmation_required"],
+				as_dict=True,
+			)
+			self.assertEqual(row.status, "Open")
 			self.assertEqual(row.customer_confirmation_required, 0)
 		finally:
 			frappe.set_user("Administrator")
