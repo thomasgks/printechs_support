@@ -180,24 +180,6 @@
         </section>
       {% endif %}
 
-      {% if article.attachments %}
-        <div class="article-attachments">
-          <h3>Attachments</h3>
-          <ul>
-            {% for att in article.attachments %}
-              <li>
-                {% set href = att.file or att.external_url %}
-                {% if href %}
-                  <a href="{{ href }}" target="_blank" rel="noopener noreferrer">{{ att.attachment_title or href }}</a>
-                {% else %}
-                  {{ att.attachment_title or "Attachment" }}
-                {% endif %}
-                {% if att.description %}<br><small>{{ att.description | safe }}</small>{% endif %}
-              </li>
-            {% endfor %}
-          </ul>
-        </div>
-      {% endif %}
     </div>
   </article>
   <footer class="article-footer">Printechs Help Center</footer>
