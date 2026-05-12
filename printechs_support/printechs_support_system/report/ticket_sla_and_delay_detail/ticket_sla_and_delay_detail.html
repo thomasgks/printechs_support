@@ -1,0 +1,203 @@
+<style>
+	.ps-sla-print {
+		color: #0f172a;
+		font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	}
+	.ps-sla-print h2 {
+		font-size: 20px;
+		font-weight: 700;
+		margin: 0 0 12px;
+	}
+	.ps-sla-print .filter-row {
+		color: #64748b;
+		display: inline-block;
+		font-size: 11px;
+		margin: 0 12px 10px 0;
+	}
+	.ps-sla-customer-section {
+		background: #fff;
+		border: 1px solid #e2e8f0;
+		border-radius: 12px;
+		margin: 0 0 18px;
+		overflow: hidden;
+		page-break-inside: avoid;
+	}
+	.ps-sla-customer-heading {
+		background: #eff6ff;
+		border-bottom: 1px solid #e2e8f0;
+		padding: 12px 14px;
+	}
+	.ps-sla-customer-name {
+		color: #075985;
+		font-size: 15px;
+		font-weight: 800;
+	}
+	.ps-sla-customer-meta {
+		color: #64748b;
+		font-size: 11px;
+		font-weight: 600;
+		margin-top: 3px;
+	}
+	.ps-sla-table {
+		border-collapse: collapse;
+		margin: 0;
+		width: 100%;
+	}
+	.ps-sla-table th {
+		background: #f8fafc;
+		border-bottom: 1px solid #e2e8f0;
+		color: #64748b;
+		font-size: 9px;
+		font-weight: 800;
+		letter-spacing: 0.02em;
+		padding: 8px;
+		text-align: left;
+		text-transform: uppercase;
+		white-space: nowrap;
+	}
+	.ps-sla-table td {
+		border-bottom: 1px solid #f1f5f9;
+		color: #334155;
+		font-size: 10px;
+		padding: 8px;
+		vertical-align: top;
+	}
+	.ps-sla-table tr:last-child td {
+		border-bottom: 0;
+	}
+	.ps-sla-number {
+		text-align: right;
+		white-space: nowrap;
+	}
+	.ps-sla-pill {
+		border-radius: 999px;
+		display: inline-block;
+		font-size: 9px;
+		font-weight: 700;
+		line-height: 1;
+		padding: 4px 7px;
+		white-space: nowrap;
+	}
+	.ps-sla-status-open { background: #dbeafe; color: #1d4ed8; }
+	.ps-sla-status-waiting { background: #fef3c7; color: #92400e; }
+	.ps-sla-status-done { background: #dcfce7; color: #166534; }
+	.ps-sla-status-cancelled { background: #fee2e2; color: #991b1b; }
+	.ps-sla-priority-low { background: #f1f5f9; color: #475569; }
+	.ps-sla-priority-medium { background: #dbeafe; color: #1d4ed8; }
+	.ps-sla-priority-high { background: #ffedd5; color: #c2410c; }
+	.ps-sla-priority-critical { background: #fee2e2; color: #b91c1c; }
+	.ps-sla-delay {
+		border-radius: 7px;
+		display: inline-block;
+		font-weight: 800;
+		min-width: 28px;
+		padding: 3px 7px;
+		text-align: center;
+	}
+	.ps-sla-delay-danger { background: #fee2e2; color: #b91c1c; }
+	.ps-sla-delay-ok { background: #f1f5f9; color: #64748b; }
+	.ps-sla-empty {
+		background: #f8fafc;
+		border: 1px dashed #cbd5e1;
+		border-radius: 10px;
+		color: #64748b;
+		padding: 16px;
+		text-align: center;
+	}
+</style>
+
+{% var esc = frappe.utils.escape_html; %}
+{% var today = frappe.datetime.now_date(); %}
+{% var datetime_df = { fieldtype: "Datetime" }; %}
+{% var get_customer = function(row) {
+	return row.customer_name || row.customer || (row.work_scope === "Internal" ? __("Internal Tickets") : __("No Customer"));
+}; %}
+{% var days_delayed = function(row) {
+	if (!row.due_date) return 0;
+	var due_date = String(row.due_date).slice(0, 10);
+	return Math.max(frappe.datetime.get_day_diff(today, due_date), 0);
+}; %}
+{% var status_class = function(status) {
+	status = String(status || "").toLowerCase();
+	if (status.indexOf("waiting") !== -1) return "ps-sla-pill ps-sla-status-waiting";
+	if (["resolved", "closed"].indexOf(status) !== -1) return "ps-sla-pill ps-sla-status-done";
+	if (status === "cancelled") return "ps-sla-pill ps-sla-status-cancelled";
+	return "ps-sla-pill ps-sla-status-open";
+}; %}
+{% var priority_class = function(priority) {
+	priority = String(priority || "low").toLowerCase();
+	return "ps-sla-pill ps-sla-priority-" + priority;
+}; %}
+{% var format_datetime = function(value) {
+	return value ? frappe.format(value, datetime_df) : "";
+}; %}
+{% var groups = []; %}
+{% var group_map = {}; %}
+{% for (var i = 0; i < data.length; i++) { %}
+	{% var row = data[i]; %}
+	{% var customer = get_customer(row); %}
+	{% if (!group_map[customer]) { %}
+		{% group_map[customer] = []; %}
+		{% groups.push({ customer: customer, rows: group_map[customer] }); %}
+	{% } %}
+	{% group_map[customer].push(row); %}
+{% } %}
+
+<div class="ps-sla-print">
+	<h2>{{ __(title) }}</h2>
+	{% if (subtitle) { %}
+		<div class="ps-sla-filters">{{ subtitle }}</div>
+	{% } %}
+
+	{% if (!groups.length) { %}
+		<div class="ps-sla-empty">{{ __("No tickets found for the selected filters.") }}</div>
+	{% } %}
+
+	{% for (var g = 0; g < groups.length; g++) { %}
+		{% var group = groups[g]; %}
+		{% var delayed_count = 0; %}
+		{% for (var d = 0; d < group.rows.length; d++) { %}
+			{% if (days_delayed(group.rows[d]) > 0) delayed_count++; %}
+		{% } %}
+		<section class="ps-sla-customer-section">
+			<div class="ps-sla-customer-heading">
+				<div class="ps-sla-customer-name">{{ esc(group.customer) }}</div>
+				<div class="ps-sla-customer-meta">
+					{{ __("Tickets") }}: {{ group.rows.length }} &nbsp;|&nbsp;
+					{{ __("Delayed") }}: {{ delayed_count }}
+				</div>
+			</div>
+			<table class="ps-sla-table">
+				<thead>
+					<tr>
+						<th>{{ __("Ticket No") }}</th>
+						<th>{{ __("Subject") }}</th>
+						<th>{{ __("Ticket Type") }}</th>
+						<th>{{ __("Status") }}</th>
+						<th>{{ __("Priority") }}</th>
+						<th>{{ __("Opening Date") }}</th>
+						<th>{{ __("Due Date") }}</th>
+						<th class="ps-sla-number">{{ __("No of Days Delayed") }}</th>
+					</tr>
+				</thead>
+				<tbody>
+					{% for (var r = 0; r < group.rows.length; r++) { %}
+						{% var ticket = group.rows[r]; %}
+						{% var delay = days_delayed(ticket); %}
+						{% var delay_class = delay > 0 ? "ps-sla-delay-danger" : "ps-sla-delay-ok"; %}
+						<tr>
+							<td>{{ esc(ticket.ticket || "") }}</td>
+							<td>{{ esc(ticket.subject || "") }}</td>
+							<td>{{ esc(ticket.ticket_type || "") }}</td>
+							<td><span class="{{ status_class(ticket.status) }}">{{ esc(ticket.status || "") }}</span></td>
+							<td><span class="{{ priority_class(ticket.priority) }}">{{ esc(ticket.priority || "") }}</span></td>
+							<td>{{ esc(format_datetime(ticket.opening_date)) }}</td>
+							<td>{{ esc(format_datetime(ticket.due_date)) }}</td>
+							<td class="ps-sla-number"><span class="ps-sla-delay {{ delay_class }}">{{ delay }}</span></td>
+						</tr>
+					{% } %}
+				</tbody>
+			</table>
+		</section>
+	{% } %}
+</div>

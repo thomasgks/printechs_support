@@ -131,6 +131,17 @@ class TestPortalTicketLifecycle(FrappeTestCase):
 			names = [t["name"] for t in tickets]
 			self.assertIn(name, names)
 
+			customer_filtered = portal_api.get_portal_tickets(200, customer=customer)
+			customer_filtered_names = [t["name"] for t in customer_filtered]
+			self.assertIn(name, customer_filtered_names)
+			self.assertTrue(all(t["customer"] == customer for t in customer_filtered))
+
+			customer_name = frappe.db.get_value("Customer", customer, "customer_name") or customer
+			customer_partial = str(customer_name)[1:12]
+			customer_partial_filtered = portal_api.get_portal_tickets(200, customer=customer_partial)
+			customer_partial_filtered_names = [t["name"] for t in customer_partial_filtered]
+			self.assertIn(name, customer_partial_filtered_names)
+
 			customers_payload = portal_api.get_portal_ticket_customers()
 			self.assertIn("customers", customers_payload)
 			cust_names = {c["name"] for c in customers_payload["customers"]}

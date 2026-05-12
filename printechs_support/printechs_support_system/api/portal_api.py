@@ -826,13 +826,20 @@ def create_portal_support_task(
 
 
 @frappe.whitelist()
-def get_portal_tickets(limit: int = 50, search: str | None = None, active_only: int | bool = 0):
+def get_portal_tickets(
+	limit: int = 50,
+	search: str | None = None,
+	active_only: int | bool = 0,
+	customer: str | None = None,
+):
 	"""List tickets for the portal.
 
 	:param search: Optional filter on ticket ID (``name`` contains search string).
 	:param active_only: If truthy, exclude Resolved / Closed / Cancelled. Default **0** so callers
 		that only pass ``limit`` (older portal bundles) still see all tickets; the SPA sends
 		``active_only=1`` when the list should hide closed tickets.
+	:param customer: Optional Customer text filter. Matches Customer link or display name inside
+		the user's existing ticket scope.
 	"""
 	user = frappe.session.user
 	if user == "Guest":
@@ -842,6 +849,7 @@ def get_portal_tickets(limit: int = 50, search: str | None = None, active_only: 
 	limit = min(int(limit), 300)
 	active = bool(cint(active_only))
 	q = (search or "").strip()
+	customer_filter = (customer or "").strip()
 
 	scope = support_ticket_scope_filters_for_lists(user)
 	if scope.get("empty"):
@@ -851,6 +859,14 @@ def get_portal_tickets(limit: int = 50, search: str | None = None, active_only: 
 
 	if active:
 		filters["status"] = ["not in", ["Resolved", "Closed", "Cancelled"]]
+
+	customer_or_filters = None
+	if customer_filter:
+		customer_like = f"%{customer_filter}%"
+		customer_or_filters = [
+			["Support Ticket", "customer", "like", customer_like],
+			["Support Ticket", "customer_name", "like", customer_like],
+		]
 
 	if q:
 		qn = q.strip()
@@ -863,6 +879,7 @@ def get_portal_tickets(limit: int = 50, search: str | None = None, active_only: 
 	rows = frappe.get_all(
 		"Support Ticket",
 		filters=filters or None,
+		or_filters=customer_or_filters,
 		fields=[
 			"name",
 			"subject",

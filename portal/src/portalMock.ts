@@ -138,11 +138,16 @@ export const MOCK_DASHBOARD_STATS = {
 /** Matches get_portal_tickets (client-side filter for mock). */
 export function mockGetPortalTickets(
 	limit: number,
-	opts?: { search?: string; activeOnly?: boolean },
+	opts?: { search?: string; activeOnly?: boolean; customer?: string },
 ): Record<string, unknown>[] {
 	let rows = [...MOCK_PORTAL_TICKETS];
 	if (opts?.activeOnly === true) {
 		rows = rows.filter((r) => !["Resolved", "Closed", "Cancelled"].includes(String(r.status ?? "")));
+	}
+	const customer = (opts?.customer ?? "").trim();
+	if (customer) {
+		const customerText = customer.toLowerCase();
+		rows = rows.filter((r) => String(r.customer ?? "").toLowerCase().includes(customerText));
 	}
 	const q = (opts?.search ?? "").trim().toLowerCase();
 	if (q) {

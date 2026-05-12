@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { getPortalTickets, portalTicketNewPath, portalTicketPath } from "../api";
+import { getPortalTicketCustomers, getPortalTickets, portalTicketNewPath, portalTicketPath } from "../api";
+import type { PortalTicketCustomerRow } from "../api";
 
 function fmtListDateTime(v: unknown): string {
 	const s = String(v ?? "").trim();
@@ -10,19 +11,44 @@ function fmtListDateTime(v: unknown): string {
 export default function TicketsPage() {
 	const [searchParams, setSearchParams] = useSearchParams();
 	const qFromUrl = (searchParams.get("q") ?? "").trim();
+	const customerFromUrl = (searchParams.get("customer") ?? "").trim();
 	const [rows, setRows] = useState<Record<string, unknown>[]>([]);
+	const [customerRows, setCustomerRows] = useState<PortalTicketCustomerRow[]>([]);
 	const [err, setErr] = useState<string | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [searchDraft, setSearchDraft] = useState(qFromUrl);
 	const [appliedSearch, setAppliedSearch] = useState(qFromUrl);
+	const [customerDraft, setCustomerDraft] = useState(customerFromUrl);
+	const [appliedCustomer, setAppliedCustomer] = useState(customerFromUrl);
 	/** false = active only; true = include resolved/closed/cancelled */
 	const [showAll, setShowAll] = useState(false);
 
-	// Sync from URL ?q= (header search or shared links)
+	// Sync from URL ?q= / ?customer= (header search or shared links)
 	useEffect(() => {
 		setSearchDraft(qFromUrl);
 		setAppliedSearch(qFromUrl);
-	}, [qFromUrl]);
+		setCustomerDraft(customerFromUrl);
+		setAppliedCustomer(customerFromUrl);
+	}, [qFromUrl, customerFromUrl]);
+
+	useEffect(() => {
+		let cancelled = false;
+		(async () => {
+			try {
+				const data = await getPortalTicketCustomers();
+				if (!cancelled) {
+					setCustomerRows(data.customers ?? []);
+				}
+			} catch {
+				if (!cancelled) {
+					setCustomerRows([]);
+				}
+			}
+		})();
+		return () => {
+			cancelled = true;
+		};
+	}, []);
 
 	const load = useCallback(async () => {
 		setErr(null);
@@ -30,6 +56,7 @@ export default function TicketsPage() {
 		try {
 			const data = await getPortalTickets(200, {
 				search: appliedSearch.trim() || undefined,
+				customer: appliedCustomer.trim() || undefined,
 				activeOnly: !showAll,
 			});
 			setRows(data);
@@ -38,7 +65,7 @@ export default function TicketsPage() {
 		} finally {
 			setLoading(false);
 		}
-	}, [appliedSearch, showAll]);
+	}, [appliedCustomer, appliedSearch, showAll]);
 
 	useEffect(() => {
 		void load();
@@ -46,16 +73,43 @@ export default function TicketsPage() {
 
 	const applySearch = () => {
 		const q = searchDraft.trim();
+		const customer = customerDraft.trim();
 		setAppliedSearch(q);
-		setSearchParams(q ? { q } : {});
+		setAppliedCustomer(customer);
+		const nextParams: Record<string, string> = {};
+		if (q) nextParams.q = q;
+		if (customer) nextParams.customer = customer;
+		setSearchParams(nextParams);
 	};
 
 	const clearFilters = () => {
 		setSearchDraft("");
 		setAppliedSearch("");
+		setCustomerDraft("");
+		setAppliedCustomer("");
 		setShowAll(false);
 		setSearchParams({});
 	};
+
+	const customerOptions = useMemo(() => {
+		const labels = new Map<string, string>();
+		for (const row of customerRows) {
+			const name = String(row.name ?? "").trim();
+			if (name) {
+				labels.set(name, String(row.customer_name || name).trim());
+			}
+		}
+		for (const row of rows) {
+			const name = String(row.customer ?? "").trim();
+			if (name && !labels.has(name)) {
+				labels.set(name, name);
+			}
+		}
+		if (customerDraft && !labels.has(customerDraft)) {
+			labels.set(customerDraft, customerDraft);
+		}
+		return Array.from(labels, ([name, label]) => ({ name, label })).sort((a, b) => a.label.localeCompare(b.label));
+	}, [customerDraft, customerRows, rows]);
 
 	if (loading && rows.length === 0 && !err) {
 		return (
@@ -107,6 +161,30 @@ export default function TicketsPage() {
 							}}
 						/>
 					</div>
+					<div className="flex min-w-[16rem] flex-col gap-1">
+						<label htmlFor="ticket-customer" className="text-xs font-semibold text-slate-600">
+							Customer contains
+						</label>
+						<input
+							id="ticket-customer"
+							type="search"
+							list="ticket-customer-options"
+							placeholder="Type any customer name..."
+							className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 shadow-inner outline-none ring-violet-500/20 placeholder:text-slate-400 focus:border-violet-400 focus:ring-4"
+							value={customerDraft}
+							onChange={(e) => setCustomerDraft(e.target.value)}
+							onKeyDown={(e) => {
+								if (e.key === "Enter") {
+									applySearch();
+								}
+							}}
+						/>
+						<datalist id="ticket-customer-options">
+							{customerOptions.map((c) => (
+								<option key={c.name} value={c.label} />
+							))}
+						</datalist>
+					</div>
 					<div className="flex min-w-[14rem] flex-col gap-1">
 						<label htmlFor="ticket-scope" className="text-xs font-semibold text-slate-600">
 							Which tickets to list
@@ -142,6 +220,7 @@ export default function TicketsPage() {
 					{showAll
 						? "Listing every status that you are allowed to see."
 						: "Hiding resolved, closed, and cancelled — switch to “All statuses” to include them."}
+					{appliedCustomer ? <span className="ml-2 font-semibold text-slate-600">Customer filter is active.</span> : null}
 					{loading ? <span className="ml-2 font-semibold text-violet-600">Refreshing…</span> : null}
 				</p>
 			</div>
