@@ -16,6 +16,7 @@ export default function TicketsPage() {
 	const [rows, setRows] = useState<Record<string, unknown>[]>([]);
 	const [customerRows, setCustomerRows] = useState<PortalTicketCustomerRow[]>([]);
 	const [ticketTypeRows, setTicketTypeRows] = useState<PortalTicketTypeRow[]>([]);
+	const [ticketTypesLoaded, setTicketTypesLoaded] = useState(false);
 	const [err, setErr] = useState<string | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [searchDraft, setSearchDraft] = useState(qFromUrl);
@@ -48,25 +49,6 @@ export default function TicketsPage() {
 			} catch {
 				if (!cancelled) {
 					setCustomerRows([]);
-				}
-			}
-		})();
-		return () => {
-			cancelled = true;
-		};
-	}, []);
-
-	useEffect(() => {
-		let cancelled = false;
-		(async () => {
-			try {
-				const data = await getPortalTicketTypes();
-				if (!cancelled) {
-					setTicketTypeRows(data.types ?? []);
-				}
-			} catch {
-				if (!cancelled) {
-					setTicketTypeRows([]);
 				}
 			}
 		})();
@@ -142,6 +124,59 @@ export default function TicketsPage() {
 		return Array.from(labels, ([name, label]) => ({ name, label })).sort((a, b) => a.label.localeCompare(b.label));
 	}, [customerDraft, customerRows, rows]);
 
+	const selectedCustomerName = useMemo(() => {
+		const raw = customerDraft.trim();
+		if (!raw) {
+			return "";
+		}
+		const rawLower = raw.toLowerCase();
+		for (const row of customerRows) {
+			const name = String(row.name ?? "").trim();
+			const label = String(row.customer_name || name).trim();
+			if (name.toLowerCase() === rawLower || label.toLowerCase() === rawLower) {
+				return name;
+			}
+		}
+		return "";
+	}, [customerDraft, customerRows]);
+
+	useEffect(() => {
+		let cancelled = false;
+		setTicketTypesLoaded(false);
+		(async () => {
+			try {
+				const data = await getPortalTicketTypes(selectedCustomerName || undefined);
+				if (!cancelled) {
+					setTicketTypeRows(data.types ?? []);
+					setTicketTypesLoaded(true);
+				}
+			} catch {
+				if (!cancelled) {
+					setTicketTypeRows([]);
+					setTicketTypesLoaded(true);
+				}
+			}
+		})();
+		return () => {
+			cancelled = true;
+		};
+	}, [selectedCustomerName]);
+
+	useEffect(() => {
+		if (!ticketTypesLoaded || !ticketTypeDraft) {
+			return;
+		}
+		if (!ticketTypeRows.some((row) => row.name === ticketTypeDraft)) {
+			setTicketTypeDraft("");
+			setAppliedTicketType("");
+			setSearchParams((prev) => {
+				const next = new URLSearchParams(prev);
+				next.delete("ticket_type");
+				return next;
+			});
+		}
+	}, [setSearchParams, ticketTypeDraft, ticketTypeRows, ticketTypesLoaded]);
+
 	const ticketTypeOptions = useMemo(() => {
 		const labels = new Map<string, string>();
 		for (const row of ticketTypeRows) {
@@ -150,17 +185,19 @@ export default function TicketsPage() {
 				labels.set(name, String(row.label || name).trim());
 			}
 		}
-		for (const row of rows) {
-			const name = String(row.ticket_type ?? "").trim();
-			if (name && !labels.has(name)) {
-				labels.set(name, String(row.ticket_type_label || name).trim());
+		if (!selectedCustomerName) {
+			for (const row of rows) {
+				const name = String(row.ticket_type ?? "").trim();
+				if (name && !labels.has(name)) {
+					labels.set(name, String(row.ticket_type_label || name).trim());
+				}
 			}
 		}
 		if (ticketTypeDraft && !labels.has(ticketTypeDraft)) {
 			labels.set(ticketTypeDraft, ticketTypeDraft);
 		}
 		return Array.from(labels, ([name, label]) => ({ name, label })).sort((a, b) => a.label.localeCompare(b.label));
-	}, [rows, ticketTypeDraft, ticketTypeRows]);
+	}, [rows, selectedCustomerName, ticketTypeDraft, ticketTypeRows]);
 
 	if (loading && rows.length === 0 && !err) {
 		return (
