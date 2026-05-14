@@ -218,7 +218,7 @@ export function getPortalBootstrap() {
 
 export function getPortalTickets(
 	limit = 50,
-	opts?: { search?: string; activeOnly?: boolean; customer?: string },
+	opts?: { search?: string; activeOnly?: boolean; customer?: string; ticketType?: string },
 ) {
 	if (isPortalMockDataEnabled()) {
 		return import("./portalMock").then((m) => m.mockGetPortalTickets(limit, opts));
@@ -229,6 +229,7 @@ export function getPortalTickets(
 			limit,
 			search: opts?.search?.trim() || "",
 			customer: opts?.customer?.trim() || "",
+			ticket_type: opts?.ticketType?.trim() || "",
 			// Only exclude closed/resolved when explicitly true (default: show all — matches server default).
 			active_only: opts?.activeOnly === true ? 1 : 0,
 		},

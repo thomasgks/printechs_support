@@ -831,6 +831,7 @@ def get_portal_tickets(
 	search: str | None = None,
 	active_only: int | bool = 0,
 	customer: str | None = None,
+	ticket_type: str | None = None,
 ):
 	"""List tickets for the portal.
 
@@ -840,6 +841,7 @@ def get_portal_tickets(
 		``active_only=1`` when the list should hide closed tickets.
 	:param customer: Optional Customer text filter. Matches Customer link or display name inside
 		the user's existing ticket scope.
+	:param ticket_type: Optional Support Ticket Type filter.
 	"""
 	user = frappe.session.user
 	if user == "Guest":
@@ -850,6 +852,7 @@ def get_portal_tickets(
 	active = bool(cint(active_only))
 	q = (search or "").strip()
 	customer_filter = (customer or "").strip()
+	ticket_type_filter = (ticket_type or "").strip()
 
 	scope = support_ticket_scope_filters_for_lists(user)
 	if scope.get("empty"):
@@ -859,6 +862,8 @@ def get_portal_tickets(
 
 	if active:
 		filters["status"] = ["not in", ["Resolved", "Closed", "Cancelled"]]
+	if ticket_type_filter:
+		filters["ticket_type"] = ticket_type_filter
 
 	customer_or_filters = None
 	if customer_filter:
@@ -885,6 +890,7 @@ def get_portal_tickets(
 			"subject",
 			"status",
 			"priority",
+			"ticket_type",
 			"modified",
 			"customer",
 			"due_date",
@@ -897,6 +903,11 @@ def get_portal_tickets(
 		ds, dc = _portal_due_datetime_wire(r.get("due_date"))
 		r["due_date"] = ds
 		r["due_date_calendar"] = dc
+		r["ticket_type_label"] = (
+			frappe.db.get_value("Support Ticket Type", r.get("ticket_type"), "ticket_type_name")
+			if r.get("ticket_type")
+			else ""
+		) or r.get("ticket_type") or ""
 	ticket_names = [r["name"] for r in rows]
 	amap_tickets = _assignee_users_by_parent("Support Ticket Assignee", ticket_names)
 	for r in rows:
@@ -2230,6 +2241,22 @@ def add_portal_task_comment(
 		row_data,
 	)
 	doc.save(ignore_permissions=True)
+
+	if visible and internal and doc.support_ticket:
+		from printechs_support.printechs_support_system.api.ticket_comment_emails import notify_ticket_comment
+
+		try:
+			notify_ticket_comment(
+				doc.support_ticket,
+				comment_type=comment_type,
+				comment_by=user,
+				content_html=safe,
+				is_internal_note=False,
+				author_is_internal=True,
+				notify_team=False,
+			)
+		except Exception:
+			frappe.log_error(frappe.get_traceback(), "portal add_portal_task_comment notify")
 
 	ts = (set_status or "").strip()
 	if ts:

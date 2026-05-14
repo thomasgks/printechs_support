@@ -138,7 +138,7 @@ export const MOCK_DASHBOARD_STATS = {
 /** Matches get_portal_tickets (client-side filter for mock). */
 export function mockGetPortalTickets(
 	limit: number,
-	opts?: { search?: string; activeOnly?: boolean; customer?: string },
+	opts?: { search?: string; activeOnly?: boolean; customer?: string; ticketType?: string },
 ): Record<string, unknown>[] {
 	let rows = [...MOCK_PORTAL_TICKETS];
 	if (opts?.activeOnly === true) {
@@ -148,6 +148,10 @@ export function mockGetPortalTickets(
 	if (customer) {
 		const customerText = customer.toLowerCase();
 		rows = rows.filter((r) => String(r.customer ?? "").toLowerCase().includes(customerText));
+	}
+	const ticketType = (opts?.ticketType ?? "").trim();
+	if (ticketType) {
+		rows = rows.filter((r) => String(r.ticket_type ?? "") === ticketType);
 	}
 	const q = (opts?.search ?? "").trim().toLowerCase();
 	if (q) {
@@ -163,6 +167,8 @@ export const MOCK_PORTAL_TICKETS: Record<string, unknown>[] = [
 		subject: "Printer offline — warehouse line 2",
 		status: "Open",
 		priority: "High",
+		ticket_type: "General",
+		ticket_type_label: "General",
 		modified: "2026-04-05 14:22:00.000000",
 		customer: "Acme Corporation",
 	},
@@ -171,6 +177,8 @@ export const MOCK_PORTAL_TICKETS: Record<string, unknown>[] = [
 		subject: "Toner reorder approval",
 		status: "In Progress",
 		priority: "Medium",
+		ticket_type: "General",
+		ticket_type_label: "General",
 		modified: "2026-04-04 09:10:00.000000",
 		customer: "Acme Corporation",
 	},
@@ -179,6 +187,8 @@ export const MOCK_PORTAL_TICKETS: Record<string, unknown>[] = [
 		subject: "Annual service contract renewal",
 		status: "Closed",
 		priority: "Low",
+		ticket_type: "Question",
+		ticket_type_label: "Question",
 		modified: "2026-03-28 16:45:00.000000",
 		customer: "Globex Trading Ltd",
 	},

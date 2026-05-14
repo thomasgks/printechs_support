@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { getPortalTicketCustomers, getPortalTickets, portalTicketNewPath, portalTicketPath } from "../api";
-import type { PortalTicketCustomerRow } from "../api";
+import { getPortalTicketCustomers, getPortalTickets, getPortalTicketTypes, portalTicketNewPath, portalTicketPath } from "../api";
+import type { PortalTicketCustomerRow, PortalTicketTypeRow } from "../api";
 
 function fmtListDateTime(v: unknown): string {
 	const s = String(v ?? "").trim();
@@ -12,14 +12,18 @@ export default function TicketsPage() {
 	const [searchParams, setSearchParams] = useSearchParams();
 	const qFromUrl = (searchParams.get("q") ?? "").trim();
 	const customerFromUrl = (searchParams.get("customer") ?? "").trim();
+	const ticketTypeFromUrl = (searchParams.get("ticket_type") ?? "").trim();
 	const [rows, setRows] = useState<Record<string, unknown>[]>([]);
 	const [customerRows, setCustomerRows] = useState<PortalTicketCustomerRow[]>([]);
+	const [ticketTypeRows, setTicketTypeRows] = useState<PortalTicketTypeRow[]>([]);
 	const [err, setErr] = useState<string | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [searchDraft, setSearchDraft] = useState(qFromUrl);
 	const [appliedSearch, setAppliedSearch] = useState(qFromUrl);
 	const [customerDraft, setCustomerDraft] = useState(customerFromUrl);
 	const [appliedCustomer, setAppliedCustomer] = useState(customerFromUrl);
+	const [ticketTypeDraft, setTicketTypeDraft] = useState(ticketTypeFromUrl);
+	const [appliedTicketType, setAppliedTicketType] = useState(ticketTypeFromUrl);
 	/** false = active only; true = include resolved/closed/cancelled */
 	const [showAll, setShowAll] = useState(false);
 
@@ -29,7 +33,9 @@ export default function TicketsPage() {
 		setAppliedSearch(qFromUrl);
 		setCustomerDraft(customerFromUrl);
 		setAppliedCustomer(customerFromUrl);
-	}, [qFromUrl, customerFromUrl]);
+		setTicketTypeDraft(ticketTypeFromUrl);
+		setAppliedTicketType(ticketTypeFromUrl);
+	}, [qFromUrl, customerFromUrl, ticketTypeFromUrl]);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -50,6 +56,25 @@ export default function TicketsPage() {
 		};
 	}, []);
 
+	useEffect(() => {
+		let cancelled = false;
+		(async () => {
+			try {
+				const data = await getPortalTicketTypes();
+				if (!cancelled) {
+					setTicketTypeRows(data.types ?? []);
+				}
+			} catch {
+				if (!cancelled) {
+					setTicketTypeRows([]);
+				}
+			}
+		})();
+		return () => {
+			cancelled = true;
+		};
+	}, []);
+
 	const load = useCallback(async () => {
 		setErr(null);
 		setLoading(true);
@@ -57,6 +82,7 @@ export default function TicketsPage() {
 			const data = await getPortalTickets(200, {
 				search: appliedSearch.trim() || undefined,
 				customer: appliedCustomer.trim() || undefined,
+				ticketType: appliedTicketType.trim() || undefined,
 				activeOnly: !showAll,
 			});
 			setRows(data);
@@ -65,7 +91,7 @@ export default function TicketsPage() {
 		} finally {
 			setLoading(false);
 		}
-	}, [appliedCustomer, appliedSearch, showAll]);
+	}, [appliedCustomer, appliedSearch, appliedTicketType, showAll]);
 
 	useEffect(() => {
 		void load();
@@ -74,11 +100,14 @@ export default function TicketsPage() {
 	const applySearch = () => {
 		const q = searchDraft.trim();
 		const customer = customerDraft.trim();
+		const ticketType = ticketTypeDraft.trim();
 		setAppliedSearch(q);
 		setAppliedCustomer(customer);
+		setAppliedTicketType(ticketType);
 		const nextParams: Record<string, string> = {};
 		if (q) nextParams.q = q;
 		if (customer) nextParams.customer = customer;
+		if (ticketType) nextParams.ticket_type = ticketType;
 		setSearchParams(nextParams);
 	};
 
@@ -87,6 +116,8 @@ export default function TicketsPage() {
 		setAppliedSearch("");
 		setCustomerDraft("");
 		setAppliedCustomer("");
+		setTicketTypeDraft("");
+		setAppliedTicketType("");
 		setShowAll(false);
 		setSearchParams({});
 	};
@@ -110,6 +141,26 @@ export default function TicketsPage() {
 		}
 		return Array.from(labels, ([name, label]) => ({ name, label })).sort((a, b) => a.label.localeCompare(b.label));
 	}, [customerDraft, customerRows, rows]);
+
+	const ticketTypeOptions = useMemo(() => {
+		const labels = new Map<string, string>();
+		for (const row of ticketTypeRows) {
+			const name = String(row.name ?? "").trim();
+			if (name) {
+				labels.set(name, String(row.label || name).trim());
+			}
+		}
+		for (const row of rows) {
+			const name = String(row.ticket_type ?? "").trim();
+			if (name && !labels.has(name)) {
+				labels.set(name, String(row.ticket_type_label || name).trim());
+			}
+		}
+		if (ticketTypeDraft && !labels.has(ticketTypeDraft)) {
+			labels.set(ticketTypeDraft, ticketTypeDraft);
+		}
+		return Array.from(labels, ([name, label]) => ({ name, label })).sort((a, b) => a.label.localeCompare(b.label));
+	}, [rows, ticketTypeDraft, ticketTypeRows]);
 
 	if (loading && rows.length === 0 && !err) {
 		return (
@@ -142,16 +193,16 @@ export default function TicketsPage() {
 
 			<div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
 				<p className="text-xs font-bold uppercase tracking-wide text-slate-500">Filters</p>
-				<div className="flex flex-col gap-4 lg:flex-row lg:flex-wrap lg:items-end lg:justify-between">
-					<div className="flex min-w-0 flex-1 flex-col gap-1">
+				<div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(11rem,0.8fr)_minmax(13rem,1fr)_minmax(12rem,0.9fr)_minmax(10rem,0.8fr)_auto] xl:items-end">
+					<div className="flex min-w-0 flex-col gap-1">
 						<label htmlFor="ticket-search-id" className="text-xs font-semibold text-slate-600">
-							Ticket ID contains
+							Ticket ID
 						</label>
 						<input
 							id="ticket-search-id"
 							type="search"
-							placeholder="e.g. SUP-TKT-2026-00027"
-							className="w-full max-w-md rounded-xl border border-slate-200 bg-white px-3 py-2 font-mono text-sm text-slate-900 shadow-inner outline-none ring-violet-500/20 placeholder:text-slate-400 focus:border-violet-400 focus:ring-4"
+							placeholder="SUP-TKT-2026-00027"
+							className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 font-mono text-sm text-slate-900 shadow-inner outline-none ring-violet-500/20 placeholder:text-slate-400 focus:border-violet-400 focus:ring-4"
 							value={searchDraft}
 							onChange={(e) => setSearchDraft(e.target.value)}
 							onKeyDown={(e) => {
@@ -161,15 +212,15 @@ export default function TicketsPage() {
 							}}
 						/>
 					</div>
-					<div className="flex min-w-[16rem] flex-col gap-1">
+					<div className="flex min-w-0 flex-col gap-1">
 						<label htmlFor="ticket-customer" className="text-xs font-semibold text-slate-600">
-							Customer contains
+							Customer
 						</label>
 						<input
 							id="ticket-customer"
 							type="search"
 							list="ticket-customer-options"
-							placeholder="Type any customer name..."
+							placeholder="Customer name..."
 							className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 shadow-inner outline-none ring-violet-500/20 placeholder:text-slate-400 focus:border-violet-400 focus:ring-4"
 							value={customerDraft}
 							onChange={(e) => setCustomerDraft(e.target.value)}
@@ -185,9 +236,27 @@ export default function TicketsPage() {
 							))}
 						</datalist>
 					</div>
-					<div className="flex min-w-[14rem] flex-col gap-1">
+					<div className="flex min-w-0 flex-col gap-1">
+						<label htmlFor="ticket-type-filter" className="text-xs font-semibold text-slate-600">
+							Ticket type
+						</label>
+						<select
+							id="ticket-type-filter"
+							className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 shadow-inner outline-none focus:border-violet-400 focus:ring-4"
+							value={ticketTypeDraft}
+							onChange={(e) => setTicketTypeDraft(e.target.value)}
+						>
+							<option value="">All types</option>
+							{ticketTypeOptions.map((t) => (
+								<option key={t.name} value={t.name}>
+									{t.label}
+								</option>
+							))}
+						</select>
+					</div>
+					<div className="flex min-w-0 flex-col gap-1">
 						<label htmlFor="ticket-scope" className="text-xs font-semibold text-slate-600">
-							Which tickets to list
+							Status
 						</label>
 						<select
 							id="ticket-scope"
@@ -195,11 +264,11 @@ export default function TicketsPage() {
 							value={showAll ? "all" : "active"}
 							onChange={(e) => setShowAll(e.target.value === "all")}
 						>
-							<option value="active">Active only (hide resolved, closed, cancelled)</option>
+							<option value="active">Active only</option>
 							<option value="all">All statuses</option>
 						</select>
 					</div>
-					<div className="flex flex-wrap items-center gap-2">
+					<div className="flex flex-wrap items-center gap-2 md:col-span-2 xl:col-span-1">
 						<button
 							type="button"
 							className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-indigo-700"
@@ -221,6 +290,7 @@ export default function TicketsPage() {
 						? "Listing every status that you are allowed to see."
 						: "Hiding resolved, closed, and cancelled — switch to “All statuses” to include them."}
 					{appliedCustomer ? <span className="ml-2 font-semibold text-slate-600">Customer filter is active.</span> : null}
+					{appliedTicketType ? <span className="ml-2 font-semibold text-slate-600">Ticket type filter is active.</span> : null}
 					{loading ? <span className="ml-2 font-semibold text-violet-600">Refreshing…</span> : null}
 				</p>
 			</div>
@@ -245,6 +315,7 @@ export default function TicketsPage() {
 							<tr>
 								<th>ID</th>
 								<th>Subject</th>
+								<th>Type</th>
 								<th>Customer</th>
 								<th>Status</th>
 								<th>Priority</th>
@@ -261,6 +332,7 @@ export default function TicketsPage() {
 										</Link>
 									</td>
 									<td>{(r.subject as string) || "—"}</td>
+									<td className="muted">{String(r.ticket_type_label || r.ticket_type || "—")}</td>
 									<td className="muted">{String(r.customer ?? "—")}</td>
 									<td>
 										<span className="pill">{String(r.status ?? "")}</span>

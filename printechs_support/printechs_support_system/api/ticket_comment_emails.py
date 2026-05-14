@@ -70,6 +70,34 @@ def _collect_team_emails(ticket) -> list[str]:
 	return sorted(out)
 
 
+def _collect_customer_portal_contact_emails(ticket) -> list[str]:
+	"""Support Agreement portal-contact emails for this ticket's customer."""
+	out: set[str] = set()
+	customer = getattr(ticket, "customer", None)
+	if customer:
+		rows = frappe.db.sql(
+			"""
+			SELECT DISTINCT pc.email
+			FROM `tabSupport Agreement Portal Contact` pc
+			INNER JOIN `tabSupport Agreement` sa ON sa.name = pc.parent
+			WHERE sa.customer = %s
+			  AND IFNULL(pc.email, '') != ''
+			""",
+			(customer,),
+			as_dict=True,
+		)
+		for row in rows:
+			e = _normalize_email(row.get("email"))
+			if e:
+				out.add(e)
+
+	if not out:
+		contact_em = _normalize_email(getattr(ticket, "contact_email", None))
+		if contact_em:
+			out.add(contact_em)
+	return sorted(out)
+
+
 def _portal_ticket_url(ticket_name: str) -> str:
 	base = get_url().rstrip("/")
 	return f"{base}/support-portal/tickets/{quote(ticket_name)}"
@@ -82,9 +110,14 @@ def _author_label(comment_by: str) -> str:
 	return (fn or comment_by).strip()
 
 
-def _strip_content_for_email(content_html: str) -> str:
+def _strip_content_for_email(content_html: str, max_chars: int = 500) -> str:
 	t = strip_html(content_html or "")
-	return t.strip() or "—"
+	t = t.strip()
+	if not t:
+		return "—"
+	if len(t) > max_chars:
+		return t[: max_chars - 1].rstrip() + "…"
+	return t
 
 
 def notify_ticket_comment(
@@ -95,12 +128,13 @@ def notify_ticket_comment(
 	content_html: str,
 	is_internal_note: bool,
 	author_is_internal: bool,
+	notify_team: bool = True,
 ) -> None:
 	"""Notify customer and/or team when a ticket comment is posted.
 
 	Rules:
 	- Internal note: email team only (lead + assignees).
-	- Customer-visible reply from staff: email contact + team.
+	- Customer-visible reply from staff: email customer portal contacts + team.
 	- Customer-visible reply from customer: email team only (lead + assignees).
 	- System updates (e.g. status): same as customer-visible from staff.
 	"""
@@ -112,7 +146,7 @@ def notify_ticket_comment(
 	except Exception:
 		return
 
-	contact_em = _normalize_email(getattr(ticket, "contact_email", None))
+	customer_emails = _collect_customer_portal_contact_emails(ticket)
 	team_emails = _collect_team_emails(ticket)
 	author_em = _user_email(comment_by)
 	subject_ticket = ticket.subject or ticket_name
@@ -122,6 +156,8 @@ def notify_ticket_comment(
 	ticket_desc_html = ticket.get_acknowledgement_description_block_html()
 
 	if is_internal_note:
+		if not notify_team:
+			return
 		recipients = [e for e in team_emails if e != author_em]
 		if not recipients:
 			recipients = list(team_emails)
@@ -145,10 +181,8 @@ def notify_ticket_comment(
 		author_is_internal = True
 
 	if author_is_internal:
-		customer_to: list[str] = []
-		if contact_em and contact_em != author_em:
-			customer_to.append(contact_em)
-		team_to = [e for e in team_emails if e != author_em]
+		customer_to = [e for e in customer_emails if e != author_em]
+		team_to = [e for e in team_emails if e != author_em] if notify_team else []
 		if customer_to:
 			subj_c = _("Update on your support ticket {0}").format(ticket_name)
 			msg_c = _html_email(
@@ -160,7 +194,6 @@ def notify_ticket_comment(
 				body_text=body_preview,
 				link=link,
 				for_customer=True,
-				ticket_description_html=ticket_desc_html,
 			)
 			_send_bulk(customer_to, subj_c, msg_c, ticket_name)
 		# Mobile push: same staff→customer-visible case, even if email list was empty (e.g. missing contact_email) but Customer is set.
@@ -196,6 +229,8 @@ def notify_ticket_comment(
 		return
 
 	# Customer posted — notify team only
+	if not notify_team:
+		return
 	team_to = [e for e in team_emails if e != author_em]
 	if not team_to:
 		return
