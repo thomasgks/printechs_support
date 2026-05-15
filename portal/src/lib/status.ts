@@ -10,6 +10,7 @@ const STATUS_NORMALIZE: Record<string, string> = {
 	completed: "done",
 	cancelled: "new",
 	delayed: "waitcust",
+	hold: "hold",
 	open: "open",
 	new: "new",
 };
@@ -33,6 +34,8 @@ export function statusBadgeClasses(status: string): string {
 			return "bg-amber-100 text-amber-900 ring-amber-200";
 		case "waitint":
 			return "bg-purple-100 text-purple-900 ring-purple-200";
+		case "hold":
+			return "bg-yellow-100 text-yellow-900 ring-yellow-200";
 		case "done":
 			return "bg-emerald-100 text-emerald-900 ring-emerald-200";
 		default:

@@ -11,7 +11,12 @@
   "column_break_1",
   "fallback_customer",
   "section_email",
-  "help_url"
+  "help_url",
+  "pending_ticket_report_interval_days",
+  "pending_ticket_report_recipients",
+  "pending_ticket_report_subject",
+  "pending_ticket_report_message",
+  "last_pending_ticket_report_sent_on"
  ],
  "fields": [
   {
@@ -60,6 +65,39 @@
    "fieldname": "help_url",
    "fieldtype": "Data",
    "label": "Help URL"
+  },
+  {
+   "description": "Fallback email addresses for pending ticket reports, one per line or comma-separated. Team reports are sent to each Support Team's default email, team lead, and members. These fallback recipients are used for teams without emails and for unassigned tickets.",
+   "fieldname": "pending_ticket_report_recipients",
+   "fieldtype": "Small Text",
+   "label": "Pending Ticket Report Recipients"
+  },
+  {
+   "default": "2",
+   "description": "How often to send the pending ticket report, in days.",
+   "fieldname": "pending_ticket_report_interval_days",
+   "fieldtype": "Int",
+   "label": "Pending Ticket Report Interval (Days)"
+  },
+  {
+   "default": "Pending Ticket SLA Report - {team} - {date}",
+   "description": "Email subject. Optional placeholders: {date}, {count}, {team}.",
+   "fieldname": "pending_ticket_report_subject",
+   "fieldtype": "Data",
+   "label": "Pending Ticket Report Subject"
+  },
+  {
+   "default": "Dear Support Team,\n\nPlease find below the pending ticket SLA and delay report. The Excel attachment contains the same list for filtering and follow-up.",
+   "description": "Message shown above the report table. Optional placeholders: {date}, {count}, {team}.",
+   "fieldname": "pending_ticket_report_message",
+   "fieldtype": "Small Text",
+   "label": "Pending Ticket Report Message"
+  },
+  {
+   "fieldname": "last_pending_ticket_report_sent_on",
+   "fieldtype": "Datetime",
+   "label": "Last Pending Ticket Report Sent On",
+   "read_only": 1
   }
  ],
  "issingle": 1,

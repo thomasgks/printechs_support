@@ -73,6 +73,7 @@ class SupportTicket(Document):
 		auto_link_support_agreement(self)
 		inherit_from_agreement(self)
 		self._promote_open_to_assigned_when_team_set()
+		self._sync_hold_routing()
 		apply_sla_to_ticket(self)
 		sync_waiting_side_fields(self)
 		if not getattr(self.flags, "workflow_transition", False):
@@ -154,6 +155,14 @@ class SupportTicket(Document):
 			return
 		ar, cot = derive_workflow_routing_for_status("Assigned")
 		self.status = "Assigned"
+		self.action_required_from = ar
+		self.current_owner_type = cot
+
+	def _sync_hold_routing(self):
+		"""Allow Desk users to choose Hold directly without manually changing routing fields."""
+		if (self.status or "").strip() != "Hold":
+			return
+		ar, cot = derive_workflow_routing_for_status("Hold")
 		self.action_required_from = ar
 		self.current_owner_type = cot
 

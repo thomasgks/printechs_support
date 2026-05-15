@@ -36,6 +36,7 @@ const PORTAL_TICKET_SEND_STATUS_OPTIONS: { value: string; label: string }[] = [
 	{ value: "Open", label: "Open" },
 	{ value: "Assigned", label: "Assigned" },
 	{ value: "In Progress", label: "In Progress" },
+	{ value: "Hold", label: "Hold" },
 	{ value: "Waiting for Customer", label: "Waiting for Customer" },
 	{ value: "Waiting for Technician", label: "Waiting for Technician" },
 	{ value: "Resolved", label: "Resolved" },

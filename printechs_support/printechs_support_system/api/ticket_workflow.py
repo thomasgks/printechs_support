@@ -24,6 +24,7 @@ WF_STATUSES = frozenset(
 		"Open",
 		"Assigned",
 		"In Progress",
+		"Hold",
 		"Waiting for Customer",
 		"Waiting for Technician",
 		"Resolved",
@@ -83,6 +84,8 @@ def derive_workflow_routing_for_status(status: str) -> tuple[str, str]:
 		return ("Technician", "Technician")
 	if s in ("In Progress", "Assigned"):
 		return ("Technician", "Technician")
+	if s == "Hold":
+		return ("None", "None")
 	if s == "Resolved":
 		return ("Customer", "Customer")
 	if s in ("Closed", "Cancelled"):
@@ -100,7 +103,7 @@ def sync_waiting_side_fields(doc) -> None:
 		doc.waiting_for_side = "Customer"
 	elif st == "Waiting for Technician":
 		doc.waiting_for_side = "Printechs"
-	elif st in ("Resolved", "Closed", "Cancelled"):
+	elif st in ("Hold", "Resolved", "Closed", "Cancelled"):
 		doc.waiting_for_side = "None"
 	if ar == "Customer":
 		doc.delay_owner = "Customer"
@@ -108,6 +111,8 @@ def sync_waiting_side_fields(doc) -> None:
 		doc.delay_owner = "Printechs"
 	elif ar == "Manager":
 		doc.delay_owner = "Printechs"
+	elif ar == "None":
+		doc.delay_owner = "None"
 
 
 def validate_workflow_consistency(doc) -> None:
@@ -130,6 +135,11 @@ def validate_workflow_consistency(doc) -> None:
 	if st == "Resolved" and ar not in ("Customer", "None"):
 		frappe.throw(
 			_("When status is Resolved, Action Required From must be Customer or None."),
+			frappe.ValidationError,
+		)
+	if st == "Hold" and ar != "None":
+		frappe.throw(
+			_("When status is Hold, Action Required From must be None."),
 			frappe.ValidationError,
 		)
 	if st in ("Closed", "Cancelled") and ar != "None":

@@ -213,8 +213,8 @@
 		},
 		{
 			"path": "printechs_support.printechs_support_system.api.portal_api.update_portal_ticket_status",
-			"args": { "ticket_name": "SUP-TKT-2026-00001", "status": "In Progress" },
-			"responseExample": { "ok": true, "status": "In Progress" }
+			"args": { "ticket_name": "SUP-TKT-2026-00001", "status": "Hold" },
+			"responseExample": { "ok": true, "status": "Hold" }
 		},
 		{
 			"path": "printechs_support.printechs_support_system.api.portal_api.update_portal_task_status",
@@ -281,7 +281,7 @@
 		{
 			"path": "printechs_support.printechs_support_system.api.portal_api.get_portal_ticket_status_options",
 			"args": { "ticket_name": "SUP-TKT-2026-00001" },
-			"responseExample": { "options": ["Open", "In Progress", "Resolved"] }
+			"responseExample": { "options": ["Open", "In Progress", "Hold", "Resolved"] }
 		},
 		{
 			"path": "printechs_support.printechs_support_system.api.portal_api.get_portal_task_status_options",

@@ -26,6 +26,10 @@ def execute(filters=None):
 		conditions.append("st.customer = %(customer)s")
 		params["customer"] = filters.customer
 
+	if filters.get("status"):
+		conditions.append("st.status = %(status)s")
+		params["status"] = filters.status
+
 	if filters.get("work_scope"):
 		conditions.append("st.work_scope = %(work_scope)s")
 		params["work_scope"] = filters.work_scope

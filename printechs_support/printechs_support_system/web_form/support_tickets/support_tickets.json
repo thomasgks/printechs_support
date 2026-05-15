@@ -106,7 +106,7 @@
    "label": "Status",
    "max_length": 0,
    "max_value": 0,
-   "options": "Draft\nOpen\nAcknowledged\nIn Progress\nWaiting for Customer\nWaiting for Internal Team\nWaiting for Approval\nResolved\nClosed\nCancelled\nReopened",
+   "options": "Draft\nOpen\nAcknowledged\nIn Progress\nHold\nWaiting for Customer\nWaiting for Internal Team\nWaiting for Approval\nResolved\nClosed\nCancelled\nReopened",
    "read_only": 1,
    "reqd": 0,
    "show_in_filter": 0

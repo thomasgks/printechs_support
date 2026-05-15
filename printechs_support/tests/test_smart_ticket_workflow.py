@@ -13,6 +13,10 @@ from printechs_support.tests.test_support_agreement import _get_or_create_test_c
 
 
 class TestSmartTicketWorkflow(FrappeTestCase):
+	def test_hold_routing(self):
+		self.assertIn("Hold", tw.WF_STATUSES)
+		self.assertEqual(tw.derive_workflow_routing_for_status("Hold"), ("None", "None"))
+
 	def test_resolution_and_confirm_desk(self):
 		frappe.set_user("Administrator")
 		try:

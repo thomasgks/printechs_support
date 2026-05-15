@@ -86,10 +86,17 @@ def auto_resolve_support_tickets_past_deadline():
 
 def daily():
 	from printechs_support.printechs_support_system.api.agreement_portal import mark_expired_support_agreements
+	from printechs_support.printechs_support_system.api.pending_ticket_report_email import (
+		send_pending_ticket_sla_report_if_due,
+	)
 	from printechs_support.printechs_support_system.api.support import send_daily_task_reminders
 
 	mark_expired_support_agreements()
 	send_daily_task_reminders()
+	try:
+		send_pending_ticket_sla_report_if_due()
+	except Exception:
+		frappe.log_error(frappe.get_traceback(), "Pending Ticket SLA Report Email")
 
 
 def hourly():

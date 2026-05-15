@@ -694,6 +694,7 @@ export function mockGetPortalTicketStatusOptions(ticketName?: string): Promise<{
 		"Open",
 		"Assigned",
 		"In Progress",
+		"Hold",
 		"Waiting for Customer",
 		"Waiting for Technician",
 		"Resolved",

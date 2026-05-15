@@ -37,6 +37,13 @@
    "wildcard_filter": 0
   },
   {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "\nOpen\nAssigned\nIn Progress\nHold\nWaiting for Customer\nWaiting for Technician\nResolved\nClosed\nCancelled",
+   "wildcard_filter": 0
+  },
+  {
    "fieldname": "work_scope",
    "fieldtype": "Select",
    "label": "Work scope",

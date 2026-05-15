@@ -66,6 +66,7 @@ class TestPortalApi(FrappeTestCase):
 			self.assertIn("options", t)
 			self.assertIsInstance(t["options"], list)
 			self.assertIn("Open", t["options"])
+			self.assertIn("Hold", t["options"])
 
 			u = portal_api.get_portal_task_status_options()
 			self.assertIn("options", u)
