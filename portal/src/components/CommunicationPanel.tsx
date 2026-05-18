@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { ChangeEvent, KeyboardEvent, ReactNode, RefObject } from "react";
+import type { ChangeEvent, ClipboardEvent, KeyboardEvent, ReactNode, RefObject } from "react";
 import { Link } from "react-router-dom";
 import {
 	addPortalTaskComment,
@@ -221,6 +221,7 @@ function CommentThreadBlock({
 	currentUser,
 	viewerIsInternalUser,
 	onReplyTo,
+	onImageOpen,
 	replyTargetId,
 	inlineComposer,
 	repliesDisabled,
@@ -229,6 +230,7 @@ function CommentThreadBlock({
 	currentUser: string;
 	viewerIsInternalUser: boolean;
 	onReplyTo: (c: PortalComment) => void;
+	onImageOpen: (url: string) => void;
 	replyTargetId?: string | null;
 	inlineComposer?: (c: PortalComment) => ReactNode;
 	repliesDisabled?: boolean;
@@ -243,6 +245,7 @@ function CommentThreadBlock({
 						viewerIsInternalUser={viewerIsInternalUser}
 						parentComment={node.parent}
 						onReply={() => onReplyTo(node.comment)}
+						onImageOpen={onImageOpen}
 						repliesDisabled={repliesDisabled}
 					/>
 					{replyTargetId && inlineComposer && node.comment.name && replyTargetId === node.comment.name ? (
@@ -255,6 +258,7 @@ function CommentThreadBlock({
 								currentUser={currentUser}
 								viewerIsInternalUser={viewerIsInternalUser}
 								onReplyTo={onReplyTo}
+								onImageOpen={onImageOpen}
 								replyTargetId={replyTargetId}
 								inlineComposer={inlineComposer}
 								repliesDisabled={repliesDisabled}
@@ -280,16 +284,20 @@ function AttachmentComposerRow({
 	disabled,
 	onPick,
 	onFileChange,
+	onCaptionChange,
 	onRemove,
+	onRemoveAll,
 }: {
 	fileInputRef: RefObject<HTMLInputElement | null>;
 	uploading: boolean;
-	pending: { file_name: string; file_url: string } | null;
+	pending: { file_url: string; caption: string }[];
 	attachErr: string | null;
 	disabled: boolean;
 	onPick: () => void;
 	onFileChange: (e: ChangeEvent<HTMLInputElement>) => void;
-	onRemove: () => void;
+	onCaptionChange: (index: number, value: string) => void;
+	onRemove: (index: number) => void;
+	onRemoveAll: () => void;
 }) {
 	return (
 		<div className="mb-3">
@@ -297,6 +305,7 @@ function AttachmentComposerRow({
 				ref={fileInputRef}
 				type="file"
 				accept="image/*"
+				multiple
 				className="sr-only"
 				aria-label="Attach image"
 				disabled={disabled || uploading}
@@ -316,23 +325,44 @@ function AttachmentComposerRow({
 					)}
 					{uploading ? "Uploading…" : "Add photo"}
 				</button>
-				<span className="text-xs text-slate-500">Images only · shown in the thread after you post</span>
+				<span className="text-xs text-slate-500">Images only · choose files or paste screenshots</span>
 			</div>
-			{pending ? (
-				<div className="mt-2 flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
-					<img
-						src={pending.file_url}
-						alt=""
-						className="h-20 w-20 rounded-lg object-cover ring-1 ring-slate-200"
-					/>
-					<div className="min-w-0 flex-1">
-						<p className="truncate text-sm font-medium text-slate-800">{pending.file_name}</p>
+			{pending.length > 0 ? (
+				<div className="mt-2 rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
+					<div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+						{pending.map((item, index) => (
+							<div key={`${item.file_url}-${index}`} className="overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+								<div className="relative">
+									<img src={item.file_url} alt="" className="h-24 w-full object-cover" />
+									<button
+										type="button"
+										className="absolute right-1 top-1 rounded-full bg-white/95 px-2 py-0.5 text-xs font-bold text-red-600 shadow ring-1 ring-red-100 hover:bg-red-50"
+										onClick={() => onRemove(index)}
+										aria-label="Remove image"
+									>
+										Remove
+									</button>
+								</div>
+								<textarea
+									className="mt-1 min-h-[4.5rem] w-full resize-y border-0 bg-white px-2 py-1.5 text-xs text-slate-800 outline-none placeholder:text-slate-400 focus:ring-2 focus:ring-violet-300"
+									placeholder={`Title or instruction for image ${index + 1}`}
+									value={item.caption}
+									disabled={disabled || uploading}
+									onChange={(e) => onCaptionChange(index, e.target.value)}
+								/>
+							</div>
+						))}
+					</div>
+					<div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+						<p className="text-xs text-slate-500">
+							{pending.length} image{pending.length === 1 ? "" : "s"} ready. Add your title or instructions in the message box.
+						</p>
 						<button
 							type="button"
 							className="mt-1 text-xs font-semibold text-red-600 underline hover:text-red-800"
-							onClick={onRemove}
+							onClick={onRemoveAll}
 						>
-							Remove
+							Remove all
 						</button>
 					</div>
 				</div>
@@ -362,6 +392,7 @@ function MessageBubble({
 	viewerIsInternalUser,
 	parentComment,
 	onReply,
+	onImageOpen,
 	repliesDisabled,
 }: {
 	c: PortalComment;
@@ -369,6 +400,7 @@ function MessageBubble({
 	viewerIsInternalUser: boolean;
 	parentComment?: PortalComment | null;
 	onReply: () => void;
+	onImageOpen: (url: string) => void;
 	repliesDisabled?: boolean;
 }) {
 	const isMe = Boolean(currentUser && c.comment_by === currentUser);
@@ -492,13 +524,22 @@ function MessageBubble({
 							</button>
 						)}
 					</div>
-					<div className="portal-thread-html max-w-none text-slate-900" dangerouslySetInnerHTML={{ __html: rewriteDeskHtmlLinks(c.content) }} />
+					<div
+						className="portal-thread-html max-w-none text-slate-900"
+						dangerouslySetInnerHTML={{ __html: rewriteDeskHtmlLinks(c.content) }}
+						onClick={(e) => {
+							const target = e.target;
+							if (target instanceof HTMLImageElement && target.src) {
+								onImageOpen(target.src);
+							}
+						}}
+					/>
 					{c.attachment_url && isLikelyImageUrl(c.attachment_url) ? (
-						<a
-							href={c.attachment_url}
-							target="_blank"
-							rel="noreferrer"
-							className="mt-3 block overflow-hidden rounded-xl border border-slate-200/80 bg-white/80 shadow-sm ring-1 ring-slate-100"
+						<button
+							type="button"
+							className="mt-3 block w-full overflow-hidden rounded-xl border border-slate-200/80 bg-white/80 shadow-sm ring-1 ring-slate-100 transition hover:ring-violet-300 focus:outline-none focus:ring-4 focus:ring-violet-300/60"
+							onClick={() => onImageOpen(String(c.attachment_url))}
+							aria-label="Zoom image"
 						>
 							<img
 								src={c.attachment_url}
@@ -506,7 +547,7 @@ function MessageBubble({
 								className="max-h-72 w-full object-contain"
 								loading="lazy"
 							/>
-						</a>
+						</button>
 					) : null}
 					{c.attachment_url ? (
 						<a
@@ -541,6 +582,7 @@ function ComposerForm({
 	sending,
 	onSend,
 	onComposerKeyDown,
+	onComposerPaste,
 	internalNote,
 	setInternalNote,
 	isInternalUser,
@@ -568,6 +610,7 @@ function ComposerForm({
 	sending: boolean;
 	onSend: () => void | Promise<void>;
 	onComposerKeyDown: (e: KeyboardEvent<HTMLTextAreaElement>) => void;
+	onComposerPaste?: (e: ClipboardEvent<HTMLTextAreaElement>) => void;
 	internalNote: boolean;
 	setInternalNote: (v: boolean) => void;
 	isInternalUser: boolean;
@@ -733,6 +776,7 @@ function ComposerForm({
 				disabled={sending}
 				onChange={(e) => setDraft(e.target.value)}
 				onKeyDown={onComposerKeyDown}
+				onPaste={onComposerPaste}
 			/>
 			<div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 				{showKeyboardTip ? (
@@ -829,13 +873,15 @@ export default function CommunicationPanel({
 	const inlineComposerTextareaRef = useRef<HTMLTextAreaElement>(null);
 	const inlineAnchorRef = useRef<HTMLDivElement>(null);
 	const attachmentFileInputRef = useRef<HTMLInputElement>(null);
-	const [pendingAttachment, setPendingAttachment] = useState<{
+	const [pendingAttachments, setPendingAttachments] = useState<Array<{
 		name: string;
 		file_name: string;
 		file_url: string;
-	} | null>(null);
+		caption: string;
+	}>>([]);
 	const [uploadingFile, setUploadingFile] = useState(false);
 	const [attachErr, setAttachErr] = useState<string | null>(null);
+	const [zoomImageUrl, setZoomImageUrl] = useState<string | null>(null);
 	const [deskHistory, setDeskHistory] = useState<PortalDeskHistoryEntry[]>([]);
 	/** Default off so long ticket history does not overwhelm the thread; opt-in via switch. */
 	const [showActivityLog, setShowActivityLog] = useState(false);
@@ -878,51 +924,108 @@ export default function CommunicationPanel({
 	}, []);
 
 	const canPost = useMemo(
-		() => !communicationLocked && Boolean(draft.trim() || pendingAttachment),
-		[communicationLocked, draft, pendingAttachment],
+		() => !communicationLocked && Boolean(draft.trim() || pendingAttachments.length > 0),
+		[communicationLocked, draft, pendingAttachments],
 	);
 
-	const onAttachmentFileChange = useCallback(
-		async (e: ChangeEvent<HTMLInputElement>) => {
+	const uploadComposerImages = useCallback(
+		async (files: File[]) => {
 			if (communicationLocked) {
 				return;
 			}
-			const f = e.target.files?.[0];
-			e.target.value = "";
-			if (!f) {
+			setAttachErr(null);
+			if (!files.length) {
 				return;
 			}
-			setAttachErr(null);
-			if (!f.type.startsWith("image/")) {
+			const imageFiles = files.filter((file) => file.type.startsWith("image/"));
+			if (imageFiles.length !== files.length) {
 				setAttachErr("Please choose an image file.");
+				return;
+			}
+			const maxImages = 10;
+			if (pendingAttachments.length + imageFiles.length > maxImages) {
+				setAttachErr(`You can attach up to ${maxImages} images per message.`);
 				return;
 			}
 			setUploadingFile(true);
 			try {
-				const r = isTask
-					? await uploadPortalTaskFile(String(taskName).trim(), f)
-					: await uploadPortalTicketFile(String(ticketName).trim(), f);
-				setPendingAttachment({ name: r.name, file_name: r.file_name, file_url: r.file_url });
+				const uploaded = [];
+				for (const file of imageFiles) {
+					const r = isTask
+						? await uploadPortalTaskFile(String(taskName).trim(), file)
+						: await uploadPortalTicketFile(String(ticketName).trim(), file);
+					uploaded.push({ name: r.name, file_name: r.file_name, file_url: r.file_url, caption: "" });
+				}
+				setPendingAttachments((prev) => [...prev, ...uploaded]);
 			} catch (err) {
 				setAttachErr(err instanceof Error ? err.message : "Upload failed");
 			} finally {
 				setUploadingFile(false);
 			}
 		},
-		[ticketName, taskName, isTask, communicationLocked],
+		[ticketName, taskName, isTask, communicationLocked, pendingAttachments.length],
+	);
+
+	const onAttachmentFileChange = useCallback(
+		async (e: ChangeEvent<HTMLInputElement>) => {
+			const files = Array.from(e.target.files ?? []);
+			e.target.value = "";
+			if (!files.length) {
+				return;
+			}
+			await uploadComposerImages(files);
+		},
+		[uploadComposerImages],
+	);
+
+	const onComposerPaste = useCallback(
+		(e: ClipboardEvent<HTMLTextAreaElement>) => {
+			if (communicationLocked || sending || uploadingFile) {
+				return;
+			}
+			const items = Array.from(e.clipboardData?.items ?? []);
+			const imageItems = items.filter((item) => item.kind === "file" && item.type.startsWith("image/"));
+			if (!imageItems.length) {
+				return;
+			}
+			e.preventDefault();
+			const files = imageItems
+				.map((item, index) => {
+					const pasted = item.getAsFile();
+					if (!pasted) {
+						return null;
+					}
+					const ext = pasted.type.split("/")[1] || "png";
+					return new File([pasted], `pasted-screenshot-${Date.now()}-${index + 1}.${ext}`, { type: pasted.type });
+				})
+				.filter((file): file is File => Boolean(file));
+			if (!files.length) {
+				setAttachErr("Could not read the pasted image.");
+				return;
+			}
+			void uploadComposerImages(files);
+		},
+		[communicationLocked, sending, uploadingFile, uploadComposerImages],
 	);
 
 	const attachmentSlot = (
 		<AttachmentComposerRow
 			fileInputRef={attachmentFileInputRef}
 			uploading={uploadingFile}
-			pending={pendingAttachment}
+			pending={pendingAttachments}
 			attachErr={attachErr}
 			disabled={sending || communicationLocked}
 			onPick={() => attachmentFileInputRef.current?.click()}
 			onFileChange={onAttachmentFileChange}
-			onRemove={() => {
-				setPendingAttachment(null);
+			onCaptionChange={(index, value) => {
+				setPendingAttachments((prev) => prev.map((item, i) => (i === index ? { ...item, caption: value } : item)));
+			}}
+			onRemove={(index) => {
+				setPendingAttachments((prev) => prev.filter((_item, i) => i !== index));
+				setAttachErr(null);
+			}}
+			onRemoveAll={() => {
+				setPendingAttachments([]);
 				setAttachErr(null);
 			}}
 		/>
@@ -1128,7 +1231,7 @@ export default function CommunicationPanel({
 		if (communicationLocked) {
 			setReplyTarget(null);
 			setDraft("");
-			setPendingAttachment(null);
+			setPendingAttachments([]);
 			setStatusAfterSend("");
 		}
 	}, [communicationLocked]);
@@ -1164,13 +1267,15 @@ export default function CommunicationPanel({
 	const onSend = async () => {
 		if (sending) return;
 		const text = draft.trim();
-		if (!text && !pendingAttachment) return;
+		if (!text && pendingAttachments.length === 0) return;
 		setSendErr(null);
 		setLastStatusHint(null);
 		setSending(true);
 		try {
 			forceScrollNextRef.current = "smooth";
-			const bodyHtml = text ? formatPlainAsHtml(text) : "";
+			const bodyHtml = [text ? formatPlainAsHtml(text) : "", buildManualImagesHtml(pendingAttachments)]
+				.filter(Boolean)
+				.join("");
 			const extraStatus = (statusAfterSend || "").trim();
 			const ticketOpts: {
 				reply_mode?: "provide_information" | "acknowledgement_only";
@@ -1196,7 +1301,7 @@ export default function CommunicationPanel({
 						bodyHtml,
 						isInternalUser && internalNote,
 						replyTarget?.name ?? null,
-						pendingAttachment?.name ?? null,
+						null,
 						isInternalUser && extraStatus ? extraStatus : null,
 					)
 				: await addPortalTicketComment(
@@ -1204,7 +1309,7 @@ export default function CommunicationPanel({
 						bodyHtml,
 						isInternalUser && internalNote,
 						replyTarget?.name ?? null,
-						pendingAttachment?.name ?? null,
+						null,
 						isInternalUser && extraStatus ? extraStatus : null,
 						hasTicketOpts ? ticketOpts : undefined,
 					);
@@ -1220,7 +1325,7 @@ export default function CommunicationPanel({
 			setStaffReplyIntent("normal_reply");
 			setStatusAfterSend("");
 			setReplyTarget(null);
-			setPendingAttachment(null);
+			setPendingAttachments([]);
 			setAttachErr(null);
 			await loadThread();
 			if (onAfterMessageSent) {
@@ -1245,6 +1350,19 @@ export default function CommunicationPanel({
 			}
 		}
 	};
+
+	useEffect(() => {
+		if (!zoomImageUrl) {
+			return;
+		}
+		const onKeyDown = (e: globalThis.KeyboardEvent) => {
+			if (e.key === "Escape") {
+				setZoomImageUrl(null);
+			}
+		};
+		window.addEventListener("keydown", onKeyDown);
+		return () => window.removeEventListener("keydown", onKeyDown);
+	}, [zoomImageUrl]);
 
 	return (
 		<section className="relative overflow-hidden rounded-3xl border border-slate-200/90 bg-slate-100/90 shadow-[0_20px_60px_-15px_rgba(79,70,229,0.12)]">
@@ -1359,6 +1477,7 @@ export default function CommunicationPanel({
 								currentUser={currentUser}
 								viewerIsInternalUser={isInternalUser}
 								onReplyTo={(c) => beginReply(c)}
+								onImageOpen={(url) => setZoomImageUrl(url)}
 								replyTargetId={replyTarget?.name}
 								repliesDisabled={communicationLocked}
 								inlineComposer={(c) => (
@@ -1389,6 +1508,7 @@ export default function CommunicationPanel({
 											sending={sending}
 											onSend={onSend}
 											onComposerKeyDown={onComposerKeyDown}
+											onComposerPaste={onComposerPaste}
 											internalNote={internalNote}
 											setInternalNote={setInternalNote}
 											isInternalUser={isInternalUser}
@@ -1569,6 +1689,7 @@ export default function CommunicationPanel({
 						sending={sending}
 						onSend={onSend}
 						onComposerKeyDown={onComposerKeyDown}
+						onComposerPaste={onComposerPaste}
 						internalNote={internalNote}
 						setInternalNote={setInternalNote}
 						isInternalUser={isInternalUser}
@@ -1590,6 +1711,29 @@ export default function CommunicationPanel({
 					/>
 				)}
 			</div>
+			{zoomImageUrl ? (
+				<div
+					className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 p-4"
+					role="dialog"
+					aria-modal="true"
+					aria-label="Image preview"
+					onClick={() => setZoomImageUrl(null)}
+				>
+					<button
+						type="button"
+						className="absolute right-4 top-4 rounded-full bg-white px-4 py-2 text-sm font-bold text-slate-900 shadow-lg hover:bg-slate-100"
+						onClick={() => setZoomImageUrl(null)}
+					>
+						Close
+					</button>
+					<img
+						src={zoomImageUrl}
+						alt=""
+						className="max-h-[88vh] max-w-[94vw] rounded-2xl bg-white object-contain shadow-2xl ring-1 ring-white/20"
+						onClick={(e) => e.stopPropagation()}
+					/>
+				</div>
+			) : null}
 		</section>
 	);
 }
@@ -1604,4 +1748,19 @@ function formatPlainAsHtml(text: string): string {
 		.split("\n")
 		.map((line) => `<p>${escapeForSimpleHtml(line)}</p>`)
 		.join("");
+}
+
+function buildManualImagesHtml(images: Array<{ file_url: string; caption: string }>): string {
+	if (!images.length) {
+		return "";
+	}
+	return `<div class="portal-manual-images">${images
+		.map((image, index) => {
+			const caption = image.caption.trim() || `Screenshot ${index + 1}`;
+			return `<figure style="margin:14px 0;padding:12px;border:1px solid #e2e8f0;border-radius:12px;background:#f8fafc;">
+<figcaption style="margin:0 0 8px;font-weight:700;color:#0f172a;">${escapeForSimpleHtml(caption)}</figcaption>
+<img src="${escapeForSimpleHtml(image.file_url)}" style="display:block;max-width:100%;height:auto;border-radius:10px;border:1px solid #e2e8f0;background:#fff;cursor:zoom-in;" />
+</figure>`;
+		})
+		.join("")}</div>`;
 }
