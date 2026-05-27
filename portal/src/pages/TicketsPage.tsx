@@ -3,40 +3,102 @@ import { Link, useSearchParams } from "react-router-dom";
 import { getPortalTicketCustomers, getPortalTickets, getPortalTicketTypes, portalTicketNewPath, portalTicketPath } from "../api";
 import type { PortalTicketCustomerRow, PortalTicketTypeRow } from "../api";
 
+const TICKET_FILTER_STORAGE_KEY = "printechs_portal_ticket_filters";
+
+type StoredTicketFilters = {
+	q?: string;
+	customer?: string;
+	ticket_type?: string;
+	show_all?: boolean;
+};
+
 function fmtListDateTime(v: unknown): string {
 	const s = String(v ?? "").trim();
 	return s ? s.slice(0, 16) : "—";
 }
 
+function readStoredTicketFilters(): StoredTicketFilters {
+	try {
+		const raw = localStorage.getItem(TICKET_FILTER_STORAGE_KEY);
+		if (!raw) {
+			return {};
+		}
+		const parsed = JSON.parse(raw) as StoredTicketFilters;
+		return parsed && typeof parsed === "object" ? parsed : {};
+	} catch {
+		return {};
+	}
+}
+
+function writeStoredTicketFilters(filters: StoredTicketFilters): void {
+	try {
+		localStorage.setItem(TICKET_FILTER_STORAGE_KEY, JSON.stringify(filters));
+	} catch {
+		/* ignore storage failures */
+	}
+}
+
+function clearStoredTicketFilters(): void {
+	try {
+		localStorage.removeItem(TICKET_FILTER_STORAGE_KEY);
+	} catch {
+		/* ignore storage failures */
+	}
+}
+
 export default function TicketsPage() {
 	const [searchParams, setSearchParams] = useSearchParams();
+	const storedFilters = useMemo(() => readStoredTicketFilters(), []);
 	const qFromUrl = (searchParams.get("q") ?? "").trim();
 	const customerFromUrl = (searchParams.get("customer") ?? "").trim();
 	const ticketTypeFromUrl = (searchParams.get("ticket_type") ?? "").trim();
+	const showAllFromUrl = searchParams.get("show_all") === "1";
+	const hasUrlFilters = Boolean(qFromUrl || customerFromUrl || ticketTypeFromUrl || searchParams.has("show_all"));
+	const initialSearch = hasUrlFilters ? qFromUrl : (storedFilters.q ?? "");
+	const initialCustomer = hasUrlFilters ? customerFromUrl : (storedFilters.customer ?? "");
+	const initialTicketType = hasUrlFilters ? ticketTypeFromUrl : (storedFilters.ticket_type ?? "");
+	const initialShowAll = hasUrlFilters ? showAllFromUrl : Boolean(storedFilters.show_all);
 	const [rows, setRows] = useState<Record<string, unknown>[]>([]);
 	const [customerRows, setCustomerRows] = useState<PortalTicketCustomerRow[]>([]);
 	const [ticketTypeRows, setTicketTypeRows] = useState<PortalTicketTypeRow[]>([]);
 	const [ticketTypesLoaded, setTicketTypesLoaded] = useState(false);
 	const [err, setErr] = useState<string | null>(null);
 	const [loading, setLoading] = useState(true);
-	const [searchDraft, setSearchDraft] = useState(qFromUrl);
-	const [appliedSearch, setAppliedSearch] = useState(qFromUrl);
-	const [customerDraft, setCustomerDraft] = useState(customerFromUrl);
-	const [appliedCustomer, setAppliedCustomer] = useState(customerFromUrl);
-	const [ticketTypeDraft, setTicketTypeDraft] = useState(ticketTypeFromUrl);
-	const [appliedTicketType, setAppliedTicketType] = useState(ticketTypeFromUrl);
+	const [searchDraft, setSearchDraft] = useState(initialSearch);
+	const [appliedSearch, setAppliedSearch] = useState(initialSearch);
+	const [customerDraft, setCustomerDraft] = useState(initialCustomer);
+	const [appliedCustomer, setAppliedCustomer] = useState(initialCustomer);
+	const [ticketTypeDraft, setTicketTypeDraft] = useState(initialTicketType);
+	const [appliedTicketType, setAppliedTicketType] = useState(initialTicketType);
 	/** false = active only; true = include resolved/closed/cancelled */
-	const [showAll, setShowAll] = useState(false);
+	const [showAll, setShowAll] = useState(initialShowAll);
+
+	const persistAndSetParams = (filters: StoredTicketFilters) => {
+		const q = (filters.q ?? "").trim();
+		const customer = (filters.customer ?? "").trim();
+		const ticketType = (filters.ticket_type ?? "").trim();
+		const nextParams: Record<string, string> = {};
+		if (q) nextParams.q = q;
+		if (customer) nextParams.customer = customer;
+		if (ticketType) nextParams.ticket_type = ticketType;
+		if (filters.show_all) nextParams.show_all = "1";
+		writeStoredTicketFilters({ q, customer, ticket_type: ticketType, show_all: Boolean(filters.show_all) });
+		setSearchParams(nextParams);
+	};
 
 	// Sync from URL ?q= / ?customer= (header search or shared links)
 	useEffect(() => {
+		if (!hasUrlFilters) {
+			return;
+		}
 		setSearchDraft(qFromUrl);
 		setAppliedSearch(qFromUrl);
 		setCustomerDraft(customerFromUrl);
 		setAppliedCustomer(customerFromUrl);
 		setTicketTypeDraft(ticketTypeFromUrl);
 		setAppliedTicketType(ticketTypeFromUrl);
-	}, [qFromUrl, customerFromUrl, ticketTypeFromUrl]);
+		setShowAll(showAllFromUrl);
+	}, [customerFromUrl, hasUrlFilters, qFromUrl, showAllFromUrl, ticketTypeFromUrl]);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -86,11 +148,7 @@ export default function TicketsPage() {
 		setAppliedSearch(q);
 		setAppliedCustomer(customer);
 		setAppliedTicketType(ticketType);
-		const nextParams: Record<string, string> = {};
-		if (q) nextParams.q = q;
-		if (customer) nextParams.customer = customer;
-		if (ticketType) nextParams.ticket_type = ticketType;
-		setSearchParams(nextParams);
+		persistAndSetParams({ q, customer, ticket_type: ticketType, show_all: showAll });
 	};
 
 	const clearFilters = () => {
@@ -101,6 +159,7 @@ export default function TicketsPage() {
 		setTicketTypeDraft("");
 		setAppliedTicketType("");
 		setShowAll(false);
+		clearStoredTicketFilters();
 		setSearchParams({});
 	};
 
@@ -299,7 +358,16 @@ export default function TicketsPage() {
 							id="ticket-scope"
 							className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 shadow-inner outline-none focus:border-violet-400 focus:ring-4"
 							value={showAll ? "all" : "active"}
-							onChange={(e) => setShowAll(e.target.value === "all")}
+							onChange={(e) => {
+								const nextShowAll = e.target.value === "all";
+								setShowAll(nextShowAll);
+								persistAndSetParams({
+									q: appliedSearch,
+									customer: appliedCustomer,
+									ticket_type: appliedTicketType,
+									show_all: nextShowAll,
+								});
+							}}
 						>
 							<option value="active">Active only</option>
 							<option value="all">All statuses</option>

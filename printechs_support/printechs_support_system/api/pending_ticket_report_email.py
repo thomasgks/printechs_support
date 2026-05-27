@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+from io import BytesIO
 import re
 from html import escape as html_escape
 from urllib.parse import quote
 
 import frappe
 from frappe import _
-from frappe.utils import cint, date_diff, format_datetime, get_url, getdate, now_datetime, today
+from frappe.utils import cint, date_diff, format_datetime, get_url, getdate, now_datetime, strip_html, today
 from frappe.utils.xlsxutils import make_xlsx
+from openpyxl import load_workbook
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
 
 PENDING_TICKET_STATUSES = (
@@ -35,6 +38,34 @@ REPORT_COLUMNS = (
 	("delay_remarks", _("Delay Remarks")),
 )
 
+EXCEL_ONLY_COLUMNS = (
+	("last_communication_on", _("Last Communication Date")),
+	("last_communication_by", _("Last Communication By")),
+	("last_communication_from_type", _("Last Communication From Type")),
+	("last_communication", _("Last Communication")),
+	("last_reply_on", _("Reply Date")),
+	("last_reply_by", _("Reply By")),
+	("last_reply_from_type", _("Reply From Type")),
+	("reply_delay_hours", _("Reply Delay (Hours)")),
+	("reply_delay_days", _("Reply Delay (Days)")),
+	("last_reply", _("Reply")),
+)
+
+STATUS_FILL_COLORS = {
+	"Open": "DBEAFE",
+	"Assigned": "EDE9FE",
+	"In Progress": "FEF3C7",
+	"Waiting for Customer": "FFEDD5",
+	"Waiting for Technician": "FCE7F3",
+}
+
+ACTOR_TYPE_FILL_COLORS = {
+	"Customer": "DCFCE7",
+	"Technician": "DBEAFE",
+	"Manager": "EDE9FE",
+	"System": "E5E7EB",
+}
+
 
 def send_pending_ticket_sla_report_if_due(*, force: bool = False) -> None:
 	"""Send the pending-ticket SLA report using the configured day interval."""
@@ -52,6 +83,7 @@ def send_pending_ticket_sla_report_if_due(*, force: bool = False) -> None:
 		rows = get_pending_ticket_report_rows(team=team.name)
 		if not rows:
 			continue
+		add_last_communication_context(rows)
 		_send_report(recipients, rows, settings=settings, team_label=team.team_name or team.name)
 		sent_count += 1
 
@@ -59,6 +91,7 @@ def send_pending_ticket_sla_report_if_due(*, force: bool = False) -> None:
 	if fallback_recipients:
 		unassigned_rows = get_pending_ticket_report_rows(unassigned=True)
 		if unassigned_rows:
+			add_last_communication_context(unassigned_rows)
 			_send_report(
 				fallback_recipients,
 				unassigned_rows,
@@ -123,6 +156,74 @@ def get_pending_ticket_report_rows(team: str | None = None, unassigned: bool = F
 	)
 
 
+def add_last_communication_context(rows: list[dict]) -> None:
+	ticket_names = [row.get("ticket") for row in rows if row.get("ticket")]
+	if not ticket_names:
+		return
+
+	comment_rows = frappe.get_all(
+		"Support Ticket Comment",
+		filters={
+			"parent": ["in", ticket_names],
+			"parenttype": "Support Ticket",
+			"parentfield": "comments",
+			"comment_type": ["!=", "System Update"],
+		},
+		fields=["name", "parent", "comment_by", "comment_on", "content", "in_reply_to"],
+		order_by="parent asc, comment_on asc, creation asc",
+		limit_page_length=0,
+	)
+	by_ticket: dict[str, list[dict]] = {}
+	by_name: dict[str, dict] = {}
+	children_by_parent: dict[str, list[dict]] = {}
+	for comment in comment_rows:
+		parent = comment.get("parent")
+		if parent:
+			by_ticket.setdefault(parent, []).append(comment)
+		name = comment.get("name")
+		if name:
+			by_name[name] = comment
+		reply_to = (comment.get("in_reply_to") or "").strip()
+		if reply_to:
+			children_by_parent.setdefault(reply_to, []).append(comment)
+
+	for row in rows:
+		comments = by_ticket.get(row.get("ticket") or "", [])
+		if not comments:
+			_set_empty_communication_context(row)
+			continue
+
+		latest = comments[-1]
+		reply_to = (latest.get("in_reply_to") or "").strip()
+		if reply_to and reply_to in by_name:
+			last_message = by_name[reply_to]
+			last_reply = latest
+		else:
+			last_message = latest
+			replies = children_by_parent.get(latest.get("name") or "", [])
+			last_reply = replies[-1] if replies else None
+
+		row["last_communication_on"] = last_message.get("comment_on")
+		row["last_communication_by"] = _comment_author_label(last_message.get("comment_by"))
+		row["last_communication_from_type"] = _comment_actor_type(last_message.get("comment_by"))
+		row["last_communication"] = _comment_text_preview(last_message.get("content"))
+		if last_reply:
+			row["last_reply_on"] = last_reply.get("comment_on")
+			row["last_reply_by"] = _comment_author_label(last_reply.get("comment_by"))
+			row["last_reply_from_type"] = _comment_actor_type(last_reply.get("comment_by"))
+			delay_hours = _datetime_diff_hours(last_message.get("comment_on"), last_reply.get("comment_on"))
+			row["reply_delay_hours"] = delay_hours
+			row["reply_delay_days"] = round(delay_hours / 24, 2) if delay_hours is not None else ""
+			row["last_reply"] = _comment_text_preview(last_reply.get("content"))
+		else:
+			row["last_reply_on"] = None
+			row["last_reply_by"] = ""
+			row["last_reply_from_type"] = ""
+			row["reply_delay_hours"] = ""
+			row["reply_delay_days"] = ""
+			row["last_reply"] = ""
+
+
 def build_pending_ticket_report_html(rows: list[dict], *, settings=None, team_label: str | None = None) -> str:
 	count = len(rows)
 	generated_on = format_datetime(now_datetime())
@@ -165,13 +266,18 @@ def build_pending_ticket_report_html(rows: list[dict], *, settings=None, team_la
 
 
 def build_pending_ticket_report_xlsx(rows: list[dict]) -> dict:
-	data = [[label for _, label in REPORT_COLUMNS]]
+	columns = REPORT_COLUMNS + EXCEL_ONLY_COLUMNS
+	data = [[label for _, label in columns]]
 	for row in rows:
-		data.append([_excel_value(row.get(field)) for field, _label in REPORT_COLUMNS])
-	xlsx = make_xlsx(data, "Pending Tickets", column_widths=[18, 42, 28, 18, 12, 22, 20, 20, 20, 20, 20, 20, 24, 44])
+		data.append([_excel_value(row.get(field)) for field, _label in columns])
+	xlsx = make_xlsx(
+		data,
+		"Pending Tickets",
+		column_widths=[18, 42, 28, 18, 12, 22, 20, 20, 20, 20, 20, 20, 24, 44, 22, 24, 22, 60, 22, 24, 18, 18, 18, 60],
+	)
 	return {
 		"fname": f"pending-ticket-sla-report-{today()}.xlsx",
-		"fcontent": xlsx.getvalue(),
+		"fcontent": _apply_status_cell_fills(xlsx, columns),
 	}
 
 
@@ -320,6 +426,114 @@ def _excel_value(value):
 	if value is None:
 		return ""
 	return value
+
+
+def _apply_status_cell_fills(xlsx_file, columns: tuple[tuple[str, str], ...]) -> bytes:
+	status_col_idx = next((idx + 1 for idx, (field, _label) in enumerate(columns) if field == "status"), None)
+
+	xlsx_file.seek(0)
+	wb = load_workbook(xlsx_file)
+	ws = wb.active
+	_style_pending_ticket_sheet(ws, columns)
+	for row_idx in range(2, ws.max_row + 1):
+		if status_col_idx:
+			cell = ws.cell(row=row_idx, column=status_col_idx)
+			color = STATUS_FILL_COLORS.get(str(cell.value or "").strip())
+			if color:
+				cell.fill = PatternFill(fill_type="solid", fgColor=color)
+
+	out = BytesIO()
+	wb.save(out)
+	return out.getvalue()
+
+
+def _style_pending_ticket_sheet(ws, columns: tuple[tuple[str, str], ...]) -> None:
+	header_fill = PatternFill(fill_type="solid", fgColor="1F2937")
+	header_font = Font(color="FFFFFF", bold=True)
+	border = Border(
+		left=Side(style="thin", color="CBD5E1"),
+		right=Side(style="thin", color="CBD5E1"),
+		top=Side(style="thin", color="CBD5E1"),
+		bottom=Side(style="thin", color="CBD5E1"),
+	)
+	wrap_fields = {"subject", "delay_remarks", "last_communication", "last_reply"}
+	wrap_columns = {idx + 1 for idx, (field, _label) in enumerate(columns) if field in wrap_fields}
+	actor_type_columns = {
+		idx + 1
+		for idx, (field, _label) in enumerate(columns)
+		if field in {"last_communication_from_type", "last_reply_from_type"}
+	}
+
+	ws.freeze_panes = "A2"
+	ws.auto_filter.ref = ws.dimensions
+	ws.row_dimensions[1].height = 24
+
+	for cell in ws[1]:
+		cell.fill = header_fill
+		cell.font = header_font
+		cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+		cell.border = border
+
+	for row in ws.iter_rows(min_row=2):
+		for cell in row:
+			if cell.column in actor_type_columns:
+				color = ACTOR_TYPE_FILL_COLORS.get(str(cell.value or "").strip())
+				if color:
+					cell.fill = PatternFill(fill_type="solid", fgColor=color)
+			cell.alignment = Alignment(
+				vertical="top",
+				wrap_text=cell.column in wrap_columns,
+			)
+			cell.border = border
+
+
+def _set_empty_communication_context(row: dict) -> None:
+	for field, _label in EXCEL_ONLY_COLUMNS:
+		row[field] = ""
+
+
+def _comment_author_label(user: str | None) -> str:
+	user = (user or "").strip()
+	if not user:
+		return ""
+	full_name = frappe.db.get_value("User", user, "full_name")
+	return (full_name or user).strip()
+
+
+def _comment_actor_type(user: str | None) -> str:
+	user = (user or "").strip()
+	if not user:
+		return ""
+	try:
+		from printechs_support.printechs_support_system.api.ticket_workflow import classify_actor_role_type
+
+		actor_type = classify_actor_role_type(user)
+		return "Technician" if actor_type == "Manager" else actor_type
+	except Exception:
+		return "Technician"
+
+
+def _datetime_diff_hours(start, end) -> float | None:
+	if not start or not end:
+		return None
+	try:
+		from frappe.utils import get_datetime
+
+		start_dt = get_datetime(start)
+		end_dt = get_datetime(end)
+		return round((end_dt - start_dt).total_seconds() / 3600, 2)
+	except Exception:
+		return None
+
+
+def _comment_text_preview(content_html: str | None, max_chars: int = 500) -> str:
+	text = strip_html(content_html or "")
+	text = re.sub(r"\s+", " ", text).strip()
+	if not text:
+		return ""
+	if len(text) > max_chars:
+		return text[: max_chars - 1].rstrip() + "..."
+	return text
 
 
 def _th_style() -> str:

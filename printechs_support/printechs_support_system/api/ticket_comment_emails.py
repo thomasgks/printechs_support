@@ -120,6 +120,16 @@ def _strip_content_for_email(content_html: str, max_chars: int = 500) -> str:
 	return t
 
 
+def _ticket_customer_label(ticket) -> str:
+	customer_name = (getattr(ticket, "customer_name", None) or "").strip()
+	if customer_name:
+		return customer_name
+	customer = (getattr(ticket, "customer", None) or "").strip()
+	if not customer:
+		return ""
+	return frappe.db.get_value("Customer", customer, "customer_name") or customer
+
+
 def notify_ticket_comment(
 	ticket_name: str,
 	*,
@@ -150,6 +160,7 @@ def notify_ticket_comment(
 	team_emails = _collect_team_emails(ticket)
 	author_em = _user_email(comment_by)
 	subject_ticket = ticket.subject or ticket_name
+	customer_name = _ticket_customer_label(ticket)
 	author_name = _author_label(comment_by)
 	body_preview = _strip_content_for_email(content_html)
 	link = _portal_ticket_url(ticket_name)
@@ -167,6 +178,7 @@ def notify_ticket_comment(
 		msg = _html_email(
 			title=_("Internal note"),
 			ticket_name=ticket_name,
+			customer_name=customer_name,
 			subject_line=subject_ticket,
 			kind=_("Internal note (not visible to customer)"),
 			author=author_name,
@@ -188,6 +200,7 @@ def notify_ticket_comment(
 			msg_c = _html_email(
 				title=_("New update on your ticket"),
 				ticket_name=ticket_name,
+				customer_name=customer_name,
 				subject_line=subject_ticket,
 				kind=comment_type,
 				author=author_name,
@@ -217,6 +230,7 @@ def notify_ticket_comment(
 			msg_t = _html_email(
 				title=_("New activity"),
 				ticket_name=ticket_name,
+				customer_name=customer_name,
 				subject_line=subject_ticket,
 				kind=comment_type,
 				author=author_name,
@@ -238,6 +252,7 @@ def notify_ticket_comment(
 	msg = _html_email(
 		title=_("Customer reply"),
 		ticket_name=ticket_name,
+		customer_name=customer_name,
 		subject_line=subject_ticket,
 		kind=comment_type,
 		author=author_name,
@@ -253,6 +268,7 @@ def _html_email(
 	*,
 	title: str,
 	ticket_name: str,
+	customer_name: str,
 	subject_line: str,
 	kind: str,
 	author: str,
@@ -271,6 +287,7 @@ def _html_email(
 <p style="margin:0 0 12px;">{html_escape(intro)}</p>
 <table style="border-collapse:collapse;width:100%;margin:12px 0 16px;font-size:13px;">
 <tr><td style="padding:4px 8px;color:#64748b;width:120px;">{html_escape(_("Ticket"))}</td><td style="padding:4px 8px;"><strong>{html_escape(ticket_name)}</strong></td></tr>
+<tr><td style="padding:4px 8px;color:#64748b;">{html_escape(_("Customer"))}</td><td style="padding:4px 8px;"><strong>{html_escape(customer_name or "—")}</strong></td></tr>
 <tr><td style="padding:4px 8px;color:#64748b;">{html_escape(_("Subject"))}</td><td style="padding:4px 8px;">{html_escape(subject_line)}</td></tr>
 <tr><td style="padding:4px 8px;color:#64748b;">{html_escape(_("Type"))}</td><td style="padding:4px 8px;">{html_escape(kind)}</td></tr>
 <tr><td style="padding:4px 8px;color:#64748b;">{html_escape(_("From"))}</td><td style="padding:4px 8px;">{html_escape(author)}</td></tr>
