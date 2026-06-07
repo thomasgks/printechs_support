@@ -220,7 +220,7 @@
    "fieldname": "status",
    "fieldtype": "Select",
    "label": "Status",
-  "options": "Open\nAssigned\nIn Progress\nHold\nWaiting for Customer\nWaiting for Technician\nResolved\nClosed\nCancelled",
+  "options": "Open\nAssigned\nIn Progress\nHold\nWaiting for Customer\nWaiting for Technician\nReopened\nResolved\nClosed\nCancelled",
    "default": "Open",
    "reqd": 1,
    "in_list_view": 1,

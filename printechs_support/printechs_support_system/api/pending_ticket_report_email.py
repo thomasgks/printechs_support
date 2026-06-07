@@ -19,6 +19,7 @@ PENDING_TICKET_STATUSES = (
 	"In Progress",
 	"Waiting for Customer",
 	"Waiting for Technician",
+	"Reopened",
 )
 
 REPORT_COLUMNS = (
@@ -57,6 +58,7 @@ STATUS_FILL_COLORS = {
 	"In Progress": "FEF3C7",
 	"Waiting for Customer": "FFEDD5",
 	"Waiting for Technician": "FCE7F3",
+	"Reopened": "FED7AA",
 }
 
 ACTOR_TYPE_FILL_COLORS = {

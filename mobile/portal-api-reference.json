@@ -281,7 +281,7 @@
 		{
 			"path": "printechs_support.printechs_support_system.api.portal_api.get_portal_ticket_status_options",
 			"args": { "ticket_name": "SUP-TKT-2026-00001" },
-			"responseExample": { "options": ["Open", "In Progress", "Hold", "Resolved"] }
+			"responseExample": { "options": ["Open", "In Progress", "Hold", "Reopened", "Resolved"] }
 		},
 		{
 			"path": "printechs_support.printechs_support_system.api.portal_api.get_portal_task_status_options",

@@ -103,6 +103,7 @@ class SupportTicket(Document):
 		len(comments) would not increase here — notifications are invoked explicitly after save.
 		"""
 		prev = self.get_doc_before_save()
+		has_new_comment_notification = False
 		if not self.flags.get("skip_comment_notification_hook") and prev:
 			old_rows = prev.comments or []
 			new_rows = self.comments or []
@@ -124,6 +125,24 @@ class SupportTicket(Document):
 						is_internal_note=is_internal_note,
 						author_is_internal=user_sees_all_support_records(by),
 					)
+					has_new_comment_notification = True
+
+		if (
+			prev
+			and not self.flags.get("workflow_transition")
+			and not has_new_comment_notification
+			and (prev.status or "") != "Reopened"
+			and (self.status or "") == "Reopened"
+		):
+			by = frappe.session.user
+			notify_ticket_comment(
+				self.name,
+				comment_type="Reopen Issue",
+				comment_by=by,
+				content_html=frappe._("Ticket reopened."),
+				is_internal_note=False,
+				author_is_internal=user_sees_all_support_records(by),
+			)
 
 		# Ticket due date → all tasks (manager / Desk). SQL only; does not recurse into task hooks.
 		if not self.flags.get("skip_due_sync") and prev:

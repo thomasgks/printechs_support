@@ -882,6 +882,16 @@ export function markTicketAwaitingCustomerResolution(ticketName: string, hours =
 	);
 }
 
+export function reopenPortalTicket(ticketName: string, message: string) {
+	if (isPortalMockDataEnabled()) {
+		return import("./portalMock").then((m) => m.mockReopenPortalTicket(ticketName, message));
+	}
+	return callMethod<{ ok: boolean; status: string }>(
+		"printechs_support.printechs_support_system.api.portal_api.portal_ticket_workflow_action",
+		{ action: "customer_reopen", ticket_name: ticketName, message },
+	);
+}
+
 export function getPortalTaskStatusOptions() {
 	if (isPortalMockDataEnabled()) {
 		return import("./portalMock").then((m) => m.mockGetPortalTaskStatusOptions());

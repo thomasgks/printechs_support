@@ -5,12 +5,22 @@ import type { PortalTicketCustomerRow, PortalTicketTypeRow } from "../api";
 
 const TICKET_FILTER_STORAGE_KEY = "printechs_portal_ticket_filters";
 
+type TicketStatusScope = "active" | "resolved_closed" | "all";
+
 type StoredTicketFilters = {
 	q?: string;
 	customer?: string;
 	ticket_type?: string;
 	show_all?: boolean;
+	status_scope?: TicketStatusScope;
 };
+
+function normalizeStatusScope(v: unknown, fallback: TicketStatusScope = "active"): TicketStatusScope {
+	if (v === "active" || v === "resolved_closed" || v === "all") {
+		return v;
+	}
+	return fallback;
+}
 
 function fmtListDateTime(v: unknown): string {
 	const s = String(v ?? "").trim();
@@ -53,11 +63,16 @@ export default function TicketsPage() {
 	const customerFromUrl = (searchParams.get("customer") ?? "").trim();
 	const ticketTypeFromUrl = (searchParams.get("ticket_type") ?? "").trim();
 	const showAllFromUrl = searchParams.get("show_all") === "1";
-	const hasUrlFilters = Boolean(qFromUrl || customerFromUrl || ticketTypeFromUrl || searchParams.has("show_all"));
+	const statusScopeFromUrl = normalizeStatusScope(searchParams.get("status_scope"), showAllFromUrl ? "all" : "active");
+	const hasUrlFilters = Boolean(
+		qFromUrl || customerFromUrl || ticketTypeFromUrl || searchParams.has("show_all") || searchParams.has("status_scope"),
+	);
 	const initialSearch = hasUrlFilters ? qFromUrl : (storedFilters.q ?? "");
 	const initialCustomer = hasUrlFilters ? customerFromUrl : (storedFilters.customer ?? "");
 	const initialTicketType = hasUrlFilters ? ticketTypeFromUrl : (storedFilters.ticket_type ?? "");
-	const initialShowAll = hasUrlFilters ? showAllFromUrl : Boolean(storedFilters.show_all);
+	const initialStatusScope = hasUrlFilters
+		? statusScopeFromUrl
+		: normalizeStatusScope(storedFilters.status_scope, storedFilters.show_all ? "all" : "active");
 	const [rows, setRows] = useState<Record<string, unknown>[]>([]);
 	const [customerRows, setCustomerRows] = useState<PortalTicketCustomerRow[]>([]);
 	const [ticketTypeRows, setTicketTypeRows] = useState<PortalTicketTypeRow[]>([]);
@@ -70,8 +85,7 @@ export default function TicketsPage() {
 	const [appliedCustomer, setAppliedCustomer] = useState(initialCustomer);
 	const [ticketTypeDraft, setTicketTypeDraft] = useState(initialTicketType);
 	const [appliedTicketType, setAppliedTicketType] = useState(initialTicketType);
-	/** false = active only; true = include resolved/closed/cancelled */
-	const [showAll, setShowAll] = useState(initialShowAll);
+	const [statusScope, setStatusScope] = useState<TicketStatusScope>(initialStatusScope);
 
 	const persistAndSetParams = (filters: StoredTicketFilters) => {
 		const q = (filters.q ?? "").trim();
@@ -81,8 +95,16 @@ export default function TicketsPage() {
 		if (q) nextParams.q = q;
 		if (customer) nextParams.customer = customer;
 		if (ticketType) nextParams.ticket_type = ticketType;
-		if (filters.show_all) nextParams.show_all = "1";
-		writeStoredTicketFilters({ q, customer, ticket_type: ticketType, show_all: Boolean(filters.show_all) });
+		const scope = normalizeStatusScope(filters.status_scope, filters.show_all ? "all" : "active");
+		if (scope !== "active") nextParams.status_scope = scope;
+		if (scope === "all") nextParams.show_all = "1";
+		writeStoredTicketFilters({
+			q,
+			customer,
+			ticket_type: ticketType,
+			show_all: scope === "all",
+			status_scope: scope,
+		});
 		setSearchParams(nextParams);
 	};
 
@@ -97,8 +119,8 @@ export default function TicketsPage() {
 		setAppliedCustomer(customerFromUrl);
 		setTicketTypeDraft(ticketTypeFromUrl);
 		setAppliedTicketType(ticketTypeFromUrl);
-		setShowAll(showAllFromUrl);
-	}, [customerFromUrl, hasUrlFilters, qFromUrl, showAllFromUrl, ticketTypeFromUrl]);
+		setStatusScope(statusScopeFromUrl);
+	}, [customerFromUrl, hasUrlFilters, qFromUrl, statusScopeFromUrl, ticketTypeFromUrl]);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -127,15 +149,19 @@ export default function TicketsPage() {
 				search: appliedSearch.trim() || undefined,
 				customer: appliedCustomer.trim() || undefined,
 				ticketType: appliedTicketType.trim() || undefined,
-				activeOnly: !showAll,
+				activeOnly: statusScope === "active",
 			});
-			setRows(data);
+			setRows(
+				statusScope === "resolved_closed"
+					? data.filter((row) => ["Resolved", "Closed"].includes(String(row.status ?? "")))
+					: data,
+			);
 		} catch (e) {
 			setErr(e instanceof Error ? e.message : "Failed to load");
 		} finally {
 			setLoading(false);
 		}
-	}, [appliedCustomer, appliedSearch, appliedTicketType, showAll]);
+	}, [appliedCustomer, appliedSearch, appliedTicketType, statusScope]);
 
 	useEffect(() => {
 		void load();
@@ -148,7 +174,7 @@ export default function TicketsPage() {
 		setAppliedSearch(q);
 		setAppliedCustomer(customer);
 		setAppliedTicketType(ticketType);
-		persistAndSetParams({ q, customer, ticket_type: ticketType, show_all: showAll });
+		persistAndSetParams({ q, customer, ticket_type: ticketType, status_scope: statusScope });
 	};
 
 	const clearFilters = () => {
@@ -158,7 +184,7 @@ export default function TicketsPage() {
 		setAppliedCustomer("");
 		setTicketTypeDraft("");
 		setAppliedTicketType("");
-		setShowAll(false);
+		setStatusScope("active");
 		clearStoredTicketFilters();
 		setSearchParams({});
 	};
@@ -357,19 +383,20 @@ export default function TicketsPage() {
 						<select
 							id="ticket-scope"
 							className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 shadow-inner outline-none focus:border-violet-400 focus:ring-4"
-							value={showAll ? "all" : "active"}
+							value={statusScope}
 							onChange={(e) => {
-								const nextShowAll = e.target.value === "all";
-								setShowAll(nextShowAll);
+								const nextScope = normalizeStatusScope(e.target.value);
+								setStatusScope(nextScope);
 								persistAndSetParams({
 									q: appliedSearch,
 									customer: appliedCustomer,
 									ticket_type: appliedTicketType,
-									show_all: nextShowAll,
+									status_scope: nextScope,
 								});
 							}}
 						>
 							<option value="active">Active only</option>
+							<option value="resolved_closed">Resolved / Closed</option>
 							<option value="all">All statuses</option>
 						</select>
 					</div>
@@ -391,9 +418,11 @@ export default function TicketsPage() {
 					</div>
 				</div>
 				<p className="text-xs text-slate-500">
-					{showAll
+					{statusScope === "all"
 						? "Listing every status that you are allowed to see."
-						: "Hiding resolved, closed, and cancelled — switch to “All statuses” to include them."}
+						: statusScope === "resolved_closed"
+							? "Showing only resolved and closed tickets."
+							: "Hiding resolved, closed, and cancelled — switch to “Resolved / Closed” or “All statuses” to include them."}
 					{appliedCustomer ? <span className="ml-2 font-semibold text-slate-600">Customer filter is active.</span> : null}
 					{appliedTicketType ? <span className="ml-2 font-semibold text-slate-600">Ticket type filter is active.</span> : null}
 					{loading ? <span className="ml-2 font-semibold text-violet-600">Refreshing…</span> : null}
@@ -404,7 +433,8 @@ export default function TicketsPage() {
 				<div className="empty-state rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 px-6 py-10">
 					<p className="font-semibold text-slate-900">No tickets match these filters.</p>
 					<p className="muted small mt-2">
-						Try <strong className="font-semibold text-slate-700">All statuses</strong>, clear the ID search, or use{" "}
+						Try <strong className="font-semibold text-slate-700">Resolved / Closed</strong> or{" "}
+						<strong className="font-semibold text-slate-700">All statuses</strong>, clear the ID search, or use{" "}
 						<strong className="font-semibold text-slate-700">Clear</strong> above.
 					</p>
 					<p className="mt-4">

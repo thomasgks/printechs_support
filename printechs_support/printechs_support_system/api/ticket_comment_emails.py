@@ -248,9 +248,14 @@ def notify_ticket_comment(
 	team_to = [e for e in team_emails if e != author_em]
 	if not team_to:
 		return
-	subj = _("[{0}] Customer reply — {1}").format(ticket_name, subject_ticket)
+	is_reopen = comment_type == "Reopen Issue"
+	subj = (
+		_("[{0}] Ticket reopened — {1}").format(ticket_name, subject_ticket)
+		if is_reopen
+		else _("[{0}] Customer reply — {1}").format(ticket_name, subject_ticket)
+	)
 	msg = _html_email(
-		title=_("Customer reply"),
+		title=_("Ticket reopened by customer") if is_reopen else _("Customer reply"),
 		ticket_name=ticket_name,
 		customer_name=customer_name,
 		subject_line=subject_ticket,

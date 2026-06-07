@@ -13,6 +13,7 @@ import {
 	getPortalTicketStatusOptions,
 	getPortalTasksForTicket,
 	markTicketAwaitingCustomerResolution,
+	reopenPortalTicket,
 	resendGoogleMeetLink,
 	updatePortalTicketDueDate,
 	updatePortalTicketStatus,
@@ -85,6 +86,9 @@ export default function TicketDetailPage() {
 	const [meetBusy, setMeetBusy] = useState(false);
 	const [meetErr, setMeetErr] = useState<string | null>(null);
 	const [meetNotice, setMeetNotice] = useState<string | null>(null);
+	const [reopenReason, setReopenReason] = useState("");
+	const [reopenBusy, setReopenBusy] = useState(false);
+	const [reopenErr, setReopenErr] = useState<string | null>(null);
 	const [helpArticles, setHelpArticles] = useState<
 		Array<{ name: string; title: string; summary: string; has_video: boolean; attachments_count: number }>
 	>([]);
@@ -205,6 +209,7 @@ export default function TicketDetailPage() {
 	/** API returns `["Resolved"]` only while the technician confirmation window is open. */
 	const customerCanConfirmResolved =
 		!internal && !terminalStatuses.has(status) && statusOptions.includes("Resolved");
+	const customerCanReopen = !internal && (status === "Resolved" || status === "Closed");
 	const assigneesRaw = doc.assigned_users;
 	const assigneesList = Array.isArray(assigneesRaw)
 		? (assigneesRaw as unknown[]).map((x) => String(x))
@@ -245,6 +250,28 @@ export default function TicketDetailPage() {
 			setMeetErr(e instanceof Error ? e.message : "Could not resend Google Meet link");
 		} finally {
 			setMeetBusy(false);
+		}
+	}
+
+	async function reopenTicket() {
+		const message = reopenReason.trim();
+		if (!message) {
+			setReopenErr("Please enter a reason before reopening the ticket.");
+			return;
+		}
+		setReopenBusy(true);
+		setReopenErr(null);
+		try {
+			const result = await reopenPortalTicket(String(doc.name), message);
+			const fresh = await refreshTicket();
+			setReopenReason("");
+			setDoc((d) => (d ? { ...d, ...fresh, status: result.status || fresh.status } : fresh));
+			const so = await getPortalTicketStatusOptions(String(doc.name));
+			setStatusOptions(so.options ?? []);
+		} catch (e) {
+			setReopenErr(e instanceof Error ? e.message : "Could not reopen ticket");
+		} finally {
+			setReopenBusy(false);
 		}
 	}
 
@@ -331,8 +358,8 @@ export default function TicketDetailPage() {
 							<div className="rounded-xl border border-slate-200/80 bg-slate-50/90 px-4 py-3 text-sm text-slate-700">
 								{terminalStatuses.has(status) ? (
 									<p>
-										This ticket is closed. If you need anything else, reply in the thread below or contact
-										your support team.
+										This ticket is closed. If the issue is not solved or has returned, you can reopen it
+										below with a short reason.
 									</p>
 								) : (
 									<p>
@@ -342,6 +369,34 @@ export default function TicketDetailPage() {
 								)}
 							</div>
 						)}
+						{customerCanReopen ? (
+							<div className="mt-4 rounded-2xl border border-orange-200 bg-orange-50/90 p-4 text-sm text-orange-950 ring-1 ring-orange-100">
+								<p className="font-bold">Need more help on this ticket?</p>
+								<p className="mt-1 text-orange-900/90">
+									Reopen this ticket only if the same issue is still not fixed or has returned. Your message will
+									send it back to the support team.
+								</p>
+								<label className="mt-3 block">
+									<span className="text-xs font-bold uppercase tracking-wide text-orange-900">Reason for reopening</span>
+									<textarea
+										className="mt-1 min-h-[5rem] w-full rounded-xl border border-orange-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-inner outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-200/60 disabled:opacity-60"
+										value={reopenReason}
+										disabled={reopenBusy}
+										placeholder="Example: The same issue happened again after testing."
+										onChange={(e) => setReopenReason(e.target.value)}
+									/>
+								</label>
+								{reopenErr ? <p className="mt-2 text-sm font-semibold text-red-700">{reopenErr}</p> : null}
+								<button
+									type="button"
+									className="mt-3 rounded-xl bg-orange-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-orange-700 disabled:opacity-60"
+									disabled={reopenBusy}
+									onClick={() => void reopenTicket()}
+								>
+									{reopenBusy ? "Reopening…" : "Reopen ticket"}
+								</button>
+							</div>
+						) : null}
 						{canRequestCustomerConfirmation ? (
 							<div className="mt-4">
 								<button

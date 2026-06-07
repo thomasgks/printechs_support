@@ -697,6 +697,7 @@ export function mockGetPortalTicketStatusOptions(ticketName?: string): Promise<{
 		"Hold",
 		"Waiting for Customer",
 		"Waiting for Technician",
+		"Reopened",
 		"Resolved",
 		"Closed",
 		"Cancelled",
@@ -722,6 +723,15 @@ export function mockMarkTicketAwaitingCustomerResolution(
 		ok: true,
 		customer_resolution_deadline: d.toISOString().slice(0, 19).replace("T", " "),
 	});
+}
+
+export function mockReopenPortalTicket(ticketName: string, message: string): Promise<{ ok: boolean; status: string }> {
+	const row = MOCK_PORTAL_TICKETS.find((t) => String(t.name) === ticketName);
+	if (row) {
+		(row as { status?: string }).status = "Reopened";
+	}
+	void message;
+	return Promise.resolve({ ok: true, status: "Reopened" });
 }
 
 export function mockGetPortalTaskStatusOptions(): Promise<{ options: string[] }> {

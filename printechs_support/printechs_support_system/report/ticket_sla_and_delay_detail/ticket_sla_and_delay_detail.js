@@ -39,6 +39,7 @@ frappe.query_reports["Ticket SLA and Delay Detail"] = {
 				"Hold",
 				"Waiting for Customer",
 				"Waiting for Technician",
+				"Reopened",
 				"Resolved",
 				"Closed",
 				"Cancelled",

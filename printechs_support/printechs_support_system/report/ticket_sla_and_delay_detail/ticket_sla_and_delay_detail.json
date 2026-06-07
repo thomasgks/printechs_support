@@ -40,7 +40,7 @@
    "fieldname": "status",
    "fieldtype": "Select",
    "label": "Status",
-   "options": "\nOpen\nAssigned\nIn Progress\nHold\nWaiting for Customer\nWaiting for Technician\nResolved\nClosed\nCancelled",
+   "options": "\nOpen\nAssigned\nIn Progress\nHold\nWaiting for Customer\nWaiting for Technician\nReopened\nResolved\nClosed\nCancelled",
    "wildcard_filter": 0
   },
   {

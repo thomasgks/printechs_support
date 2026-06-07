@@ -28,7 +28,6 @@ def get_initial_support_ticket_status() -> str:
 		"Acknowledged": "Assigned",
 		"Waiting for Internal Team": "Waiting for Technician",
 		"Waiting for Approval": "Open",
-		"Reopened": "In Progress",
 	}
 	state = legacy.get(state, state)
 	from printechs_support.printechs_support_system.api.ticket_workflow import WF_STATUSES
@@ -368,7 +367,7 @@ def resolve_ticket_api(ticket_name: str, resolution_summary: str | None = None) 
 
 def reopen_ticket(ticket_name: str) -> None:
 	doc = frappe.get_doc("Support Ticket", ticket_name)
-	doc.status = "In Progress"
+	doc.status = "Reopened"
 	doc.action_required_from = "Technician"
 	doc.current_owner_type = "Technician"
 	doc.is_reopened = 1

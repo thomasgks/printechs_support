@@ -7,6 +7,7 @@ const STATUS_NORMALIZE: Record<string, string> = {
 	"waiting for printechs": "waitint",
 	"waiting for internal team": "waitint",
 	"in progress": "progress",
+	reopened: "reopened",
 	completed: "done",
 	cancelled: "new",
 	delayed: "waitcust",
@@ -30,6 +31,8 @@ export function statusBadgeClasses(status: string): string {
 			return "bg-blue-100 text-blue-800 ring-blue-200";
 		case "progress":
 			return "bg-indigo-100 text-indigo-800 ring-indigo-200";
+		case "reopened":
+			return "bg-orange-100 text-orange-900 ring-orange-200";
 		case "waitcust":
 			return "bg-amber-100 text-amber-900 ring-amber-200";
 		case "waitint":

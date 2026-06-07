@@ -1507,6 +1507,7 @@ _SUPPORT_TICKET_STATUSES = (
 	"Hold",
 	"Waiting for Customer",
 	"Waiting for Technician",
+	"Reopened",
 	"Resolved",
 	"Closed",
 	"Cancelled",

@@ -17,6 +17,10 @@ class TestSmartTicketWorkflow(FrappeTestCase):
 		self.assertIn("Hold", tw.WF_STATUSES)
 		self.assertEqual(tw.derive_workflow_routing_for_status("Hold"), ("None", "None"))
 
+	def test_reopened_routing(self):
+		self.assertIn("Reopened", tw.WF_STATUSES)
+		self.assertEqual(tw.derive_workflow_routing_for_status("Reopened"), ("Technician", "Technician"))
+
 	def test_resolution_and_confirm_desk(self):
 		frappe.set_user("Administrator")
 		try:

@@ -12,7 +12,6 @@ def execute():
 		"Acknowledged": "Assigned",
 		"Waiting for Internal Team": "Waiting for Technician",
 		"Waiting for Approval": "Open",
-		"Reopened": "In Progress",
 	}
 	for old, new in status_map.items():
 		frappe.db.sql(

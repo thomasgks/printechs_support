@@ -27,6 +27,7 @@ WF_STATUSES = frozenset(
 		"Hold",
 		"Waiting for Customer",
 		"Waiting for Technician",
+		"Reopened",
 		"Resolved",
 		"Closed",
 		"Cancelled",
@@ -82,7 +83,7 @@ def derive_workflow_routing_for_status(status: str) -> tuple[str, str]:
 		return ("Customer", "Customer")
 	if s == "Waiting for Technician":
 		return ("Technician", "Technician")
-	if s in ("In Progress", "Assigned"):
+	if s in ("In Progress", "Assigned", "Reopened"):
 		return ("Technician", "Technician")
 	if s == "Hold":
 		return ("None", "None")
@@ -105,6 +106,8 @@ def sync_waiting_side_fields(doc) -> None:
 		doc.waiting_for_side = "Printechs"
 	elif st in ("Hold", "Resolved", "Closed", "Cancelled"):
 		doc.waiting_for_side = "None"
+	elif st == "Reopened":
+		doc.waiting_for_side = "Printechs"
 	if ar == "Customer":
 		doc.delay_owner = "Customer"
 	elif ar == "Technician":
@@ -130,6 +133,11 @@ def validate_workflow_consistency(doc) -> None:
 	if st == "Waiting for Technician" and ar not in ("Technician",):
 		frappe.throw(
 			_("When status is Waiting for Technician, Action Required From must be Technician."),
+			frappe.ValidationError,
+		)
+	if st == "Reopened" and ar not in ("Technician",):
+		frappe.throw(
+			_("When status is Reopened, Action Required From must be Technician."),
 			frappe.ValidationError,
 		)
 	if st == "Resolved" and ar not in ("Customer", "None"):
@@ -476,7 +484,7 @@ def customer_followup_question(
 	*,
 	reopen_from_resolved: bool = False,
 ) -> dict[str, Any]:
-	"""Customer follow-up; optionally bump to Waiting for Technician / In Progress."""
+	"""Customer follow-up; optionally bump to Waiting for Technician / Reopened."""
 	doc = _doc_or_name(ticket_name)
 	uid = user or frappe.session.user
 	_assert_terminal_policy(doc)
@@ -486,7 +494,7 @@ def customer_followup_question(
 	prev_ar = doc.action_required_from
 
 	if prev_st == "Resolved" and reopen_from_resolved:
-		doc.status = "In Progress"
+		doc.status = "Reopened"
 		doc.action_required_from = "Technician"
 		doc.current_owner_type = "Technician"
 		doc.reopened_count = int(doc.reopened_count or 0) + 1
@@ -522,7 +530,7 @@ def technician_resume_after_customer_reply(
 	prev_st = doc.status
 	prev_ar = doc.action_required_from
 
-	if prev_st == "Waiting for Technician":
+	if prev_st in ("Waiting for Technician", "Reopened"):
 		doc.status = "In Progress"
 	doc.action_required_from = "Technician"
 	doc.current_owner_type = "Technician"
@@ -553,7 +561,7 @@ def technician_send_work_update(ticket_name: str, message: str, user: str | None
 
 	if prev_st == "Waiting for Technician":
 		doc.status = "In Progress"
-	elif prev_st in ("Assigned",):
+	elif prev_st in ("Assigned", "Reopened"):
 		doc.status = "In Progress"
 
 	doc.action_required_from = "Technician"
@@ -670,7 +678,7 @@ def customer_reopen_issue(ticket_name: str, message: str, user: str | None = Non
 	if prev_st not in ("Resolved", "Closed"):
 		frappe.throw(_("Ticket can only be reopened from Resolved or Closed."), frappe.ValidationError)
 
-	doc.status = "In Progress"
+	doc.status = "Reopened"
 	doc.action_required_from = "Technician"
 	doc.current_owner_type = "Technician"
 	doc.reopened_count = int(doc.reopened_count or 0) + 1
@@ -685,6 +693,19 @@ def customer_reopen_issue(ticket_name: str, message: str, user: str | None = Non
 		prev_st=prev_st,
 		prev_ar=prev_ar,
 	)
+	try:
+		from printechs_support.printechs_support_system.api.ticket_comment_emails import notify_ticket_comment
+
+		notify_ticket_comment(
+			doc.name,
+			comment_type="Reopen Issue",
+			comment_by=uid,
+			content_html=message,
+			is_internal_note=False,
+			author_is_internal=False,
+		)
+	except Exception:
+		frappe.log_error(frappe.get_traceback(), "Support Ticket reopen email")
 	return {"ok": True, "status": doc.status}
 
 
