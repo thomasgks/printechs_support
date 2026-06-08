@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import CommunicationPanel from "../components/CommunicationPanel";
 import FilesPanel from "../components/FilesPanel";
+import HistorySummaryPanel from "../components/HistorySummaryPanel";
 import StatusSelect from "../components/StatusSelect";
 import TaskProgressStepper from "../components/TaskProgressStepper";
 import TechnicianTaskAssignment from "../components/TechnicianTaskAssignment";
@@ -197,6 +198,9 @@ export default function TaskDetailPage() {
 							{String(doc.task_type ?? "—")}
 						</span>
 					</div>
+					<div className="mt-6">
+						<TaskProgressStepper status={status} embedded />
+					</div>
 					<div className="mt-6 grid gap-4 border-t border-white/50 pt-6 sm:grid-cols-2 lg:grid-cols-4">
 						<div>
 							<p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Customer</p>
@@ -301,8 +305,6 @@ export default function TaskDetailPage() {
 				/>
 			) : null}
 
-			<TaskProgressStepper status={status} />
-
 			<section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-saas">
 				<h2 className="mb-4 font-['Syne',system-ui,sans-serif] text-lg font-bold text-slate-900">Task details</h2>
 				<dl className="detail-dl">
@@ -373,6 +375,7 @@ export default function TaskDetailPage() {
 					. Messages below are <strong>task-specific</strong> and stay on this task.
 				</div>
 			) : null}
+			<HistorySummaryPanel mode="task" name={String(doc.name)} doc={doc} />
 			<CommunicationPanel
 				taskName={String(doc.name)}
 				communicationLocked={portalBoolOrNull(doc.communication_locked) ?? false}

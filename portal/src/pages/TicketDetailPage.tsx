@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import CommunicationPanel from "../components/CommunicationPanel";
 import FilesPanel from "../components/FilesPanel";
+import HistorySummaryPanel from "../components/HistorySummaryPanel";
 import StatusSelect from "../components/StatusSelect";
+import TicketProgressStepper from "../components/TicketProgressStepper";
 import {
 	createGoogleMeet,
 	getContextualHelp,
@@ -80,6 +82,8 @@ export default function TicketDetailPage() {
 	const [err, setErr] = useState<string | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [confirmationBusy, setConfirmationBusy] = useState(false);
+	const [customerConfirmBusy, setCustomerConfirmBusy] = useState(false);
+	const [customerConfirmErr, setCustomerConfirmErr] = useState<string | null>(null);
 	const [dueEdit, setDueEdit] = useState("");
 	const [dueSaving, setDueSaving] = useState(false);
 	const [dueErr, setDueErr] = useState<string | null>(null);
@@ -206,9 +210,9 @@ export default function TicketDetailPage() {
 	/** Match server: only after work is done and the ticket is waiting on the customer. */
 	const canRequestCustomerConfirmation =
 		internal && !terminalStatuses.has(status) && status === "Waiting for Customer";
-	/** API returns `["Resolved"]` only while the technician confirmation window is open. */
+	/** Show the customer a simple confirmation action when support is waiting for their test result. */
 	const customerCanConfirmResolved =
-		!internal && !terminalStatuses.has(status) && statusOptions.includes("Resolved");
+		!internal && !terminalStatuses.has(status) && (status === "Waiting for Customer" || statusOptions.includes("Resolved"));
 	const customerCanReopen = !internal && (status === "Resolved" || status === "Closed");
 	const assigneesRaw = doc.assigned_users;
 	const assigneesList = Array.isArray(assigneesRaw)
@@ -275,6 +279,30 @@ export default function TicketDetailPage() {
 		}
 	}
 
+	async function confirmIssueFixed() {
+		setCustomerConfirmBusy(true);
+		setCustomerConfirmErr(null);
+		try {
+			const r = await updatePortalTicketStatus(String(doc.name), "Resolved");
+			setDoc((d) =>
+				d
+					? {
+							...d,
+							status: r.status,
+							customer_resolution_deadline: null,
+							customer_confirmation_required: 0,
+						}
+					: d,
+			);
+			const so = await getPortalTicketStatusOptions(String(doc.name));
+			setStatusOptions(so.options ?? []);
+		} catch (e) {
+			setCustomerConfirmErr(e instanceof Error ? e.message : "Could not confirm the issue is fixed");
+		} finally {
+			setCustomerConfirmBusy(false);
+		}
+	}
+
 	return (
 		<div className="page-grid mx-auto w-full max-w-screen-2xl gap-8">
 			<p className="detail-back">
@@ -309,12 +337,14 @@ export default function TicketDetailPage() {
 							{String(doc.priority ?? "—")}
 						</span>
 					</div>
+					<div className="mt-6">
+						<TicketProgressStepper status={status} />
+					</div>
 					<div className="mt-6 rounded-2xl border border-white/60 bg-white/70 p-4 backdrop-blur">
 						{!internal && deadlineStr && !terminalStatuses.has(status) ? (
 							<div className="mb-4 rounded-xl border border-amber-200/90 bg-amber-50/95 px-4 py-3 text-sm text-amber-950 shadow-sm">
-								<strong>Confirmation requested.</strong> If your issue is fixed, set status to{" "}
-								<strong>Resolved</strong>. Respond by {deadlineStr} or the ticket will be marked Resolved
-								automatically.
+								<strong>Confirmation requested.</strong> If your issue is fixed, please confirm below.
+								Respond by {deadlineStr} or the ticket will be marked Resolved automatically.
 							</div>
 						) : null}
 						{internal ? (
@@ -330,30 +360,21 @@ export default function TicketDetailPage() {
 								}}
 							/>
 						) : customerCanConfirmResolved ? (
-							<StatusSelect
-								label="Confirm resolution"
-								value={status}
-								options={mergeStatusOptions(status, statusOptions)}
-								onSave={async (next) => {
-									const r = await updatePortalTicketStatus(String(doc.name), next);
-									setDoc((d) =>
-										d
-											? {
-													...d,
-													status: r.status,
-													...(next === "Resolved"
-														? {
-																customer_resolution_deadline: null,
-																customer_confirmation_required: 0,
-															}
-														: {}),
-												}
-											: d,
-									);
-									const so = await getPortalTicketStatusOptions(String(doc.name));
-									setStatusOptions(so.options ?? []);
-								}}
-							/>
+							<div className="rounded-2xl border border-emerald-200 bg-emerald-50/90 p-4 text-sm text-emerald-950 ring-1 ring-emerald-100">
+								<p className="font-bold">Please confirm after testing.</p>
+								<p className="mt-1 text-emerald-900/90">
+									If the issue is fixed and no further support is needed, click the button below.
+								</p>
+								{customerConfirmErr ? <p className="mt-2 text-sm font-semibold text-red-700">{customerConfirmErr}</p> : null}
+								<button
+									type="button"
+									className="mt-3 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-60"
+									disabled={customerConfirmBusy}
+									onClick={() => void confirmIssueFixed()}
+								>
+									{customerConfirmBusy ? "Confirming…" : "Confirm issue is fixed"}
+								</button>
+							</div>
 						) : (
 							<div className="rounded-xl border border-slate-200/80 bg-slate-50/90 px-4 py-3 text-sm text-slate-700">
 								{terminalStatuses.has(status) ? (
@@ -736,6 +757,8 @@ export default function TicketDetailPage() {
 					</section>
 				);
 			})()}
+
+			<HistorySummaryPanel mode="ticket" name={String(doc.name)} doc={doc} />
 
 			<CommunicationPanel
 				ticketName={String(doc.name)}

@@ -21,6 +21,7 @@ import {
 	stripHtmlToPlain,
 	type CommentThreadNode,
 } from "../lib/commentTree";
+import { portalCommentAnchorId } from "../lib/commentAnchors";
 import { rewriteDeskHtmlLinks } from "../lib/deskLinks";
 import { formatCommentTime } from "../lib/formatTime";
 
@@ -239,7 +240,11 @@ function CommentThreadBlock({
 	return (
 		<div className="space-y-3">
 			{nodes.map((node) => (
-				<div key={node.comment.name ?? `${node.comment.comment_on}-${node.comment.comment_by}`}>
+				<div
+					key={node.comment.name ?? `${node.comment.comment_on}-${node.comment.comment_by}`}
+					id={portalCommentAnchorId(node.comment)}
+					className="scroll-mt-28 rounded-2xl transition-colors target:bg-violet-50/80 target:ring-2 target:ring-violet-200"
+				>
 					<MessageBubble
 						c={node.comment}
 						currentUser={currentUser}

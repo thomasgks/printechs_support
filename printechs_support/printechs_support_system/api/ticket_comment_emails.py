@@ -130,6 +130,24 @@ def _ticket_customer_label(ticket) -> str:
 	return frappe.db.get_value("Customer", customer, "customer_name") or customer
 
 
+def _email_activity_type(comment_type: str, *, author_is_internal: bool, is_internal_note: bool) -> str:
+	"""Display-side activity label for email templates.
+
+	The stored ``comment_type`` intentionally uses "Customer Reply" for customer-visible
+	thread rows, including staff replies. Email recipients need the author side instead.
+	"""
+	kind = (comment_type or "").strip()
+	if is_internal_note:
+		return _("Internal note (not visible to customer)")
+	if kind == "System Update":
+		return _("System Update")
+	if kind == "Reopen Issue":
+		return _("Reopen Issue")
+	if author_is_internal and kind in ("", "Comment", "Reply", "Customer Reply"):
+		return _("Technician Reply")
+	return kind or _("Comment")
+
+
 def notify_ticket_comment(
 	ticket_name: str,
 	*,
@@ -191,6 +209,11 @@ def notify_ticket_comment(
 	# Customer-visible — status/system lines should always notify the customer when visible
 	if comment_type == "System Update":
 		author_is_internal = True
+	email_kind = _email_activity_type(
+		comment_type,
+		author_is_internal=author_is_internal,
+		is_internal_note=is_internal_note,
+	)
 
 	if author_is_internal:
 		customer_to = [e for e in customer_emails if e != author_em]
@@ -202,7 +225,7 @@ def notify_ticket_comment(
 				ticket_name=ticket_name,
 				customer_name=customer_name,
 				subject_line=subject_ticket,
-				kind=comment_type,
+				kind=email_kind,
 				author=author_name,
 				body_text=body_preview,
 				link=link,
@@ -232,7 +255,7 @@ def notify_ticket_comment(
 				ticket_name=ticket_name,
 				customer_name=customer_name,
 				subject_line=subject_ticket,
-				kind=comment_type,
+				kind=email_kind,
 				author=author_name,
 				body_text=body_preview,
 				link=link,
@@ -259,7 +282,7 @@ def notify_ticket_comment(
 		ticket_name=ticket_name,
 		customer_name=customer_name,
 		subject_line=subject_ticket,
-		kind=comment_type,
+		kind=email_kind,
 		author=author_name,
 		body_text=body_preview,
 		link=link,

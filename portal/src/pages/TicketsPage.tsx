@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { getPortalTicketCustomers, getPortalTickets, getPortalTicketTypes, portalTicketNewPath, portalTicketPath } from "../api";
-import type { PortalTicketCustomerRow, PortalTicketTypeRow } from "../api";
+import {
+	getPortalBootstrap,
+	getPortalTicketCustomers,
+	getPortalTickets,
+	getPortalTicketTypes,
+	portalTicketNewPath,
+	portalTicketPath,
+} from "../api";
+import type { PortalBootstrapResult, PortalTicketCustomerRow, PortalTicketTypeRow } from "../api";
 
 const TICKET_FILTER_STORAGE_KEY = "printechs_portal_ticket_filters";
 
@@ -74,6 +81,7 @@ export default function TicketsPage() {
 		? statusScopeFromUrl
 		: normalizeStatusScope(storedFilters.status_scope, storedFilters.show_all ? "all" : "active");
 	const [rows, setRows] = useState<Record<string, unknown>[]>([]);
+	const [bootstrap, setBootstrap] = useState<PortalBootstrapResult | null>(null);
 	const [customerRows, setCustomerRows] = useState<PortalTicketCustomerRow[]>([]);
 	const [ticketTypeRows, setTicketTypeRows] = useState<PortalTicketTypeRow[]>([]);
 	const [ticketTypesLoaded, setTicketTypesLoaded] = useState(false);
@@ -126,12 +134,14 @@ export default function TicketsPage() {
 		let cancelled = false;
 		(async () => {
 			try {
-				const data = await getPortalTicketCustomers();
+				const [boot, data] = await Promise.all([getPortalBootstrap(), getPortalTicketCustomers()]);
 				if (!cancelled) {
+					setBootstrap(boot);
 					setCustomerRows(data.customers ?? []);
 				}
 			} catch {
 				if (!cancelled) {
+					setBootstrap(null);
 					setCustomerRows([]);
 				}
 			}
@@ -140,6 +150,25 @@ export default function TicketsPage() {
 			cancelled = true;
 		};
 	}, []);
+
+	useEffect(() => {
+		if (!bootstrap?.logged_in || bootstrap.internal || bootstrap.customers.length !== 1) {
+			return;
+		}
+		const customer = String(bootstrap.customers[0] ?? "").trim();
+		if (!customer) {
+			return;
+		}
+		setCustomerDraft(customer);
+		setAppliedCustomer(customer);
+		writeStoredTicketFilters({
+			q: appliedSearch,
+			customer,
+			ticket_type: appliedTicketType,
+			show_all: statusScope === "all",
+			status_scope: statusScope,
+		});
+	}, [appliedSearch, appliedTicketType, bootstrap, statusScope]);
 
 	const load = useCallback(async () => {
 		setErr(null);
@@ -303,6 +332,7 @@ export default function TicketsPage() {
 	}
 
 	const hasRows = rows.length > 0;
+	const fixedCustomerFilter = Boolean(bootstrap?.logged_in && !bootstrap.internal && bootstrap.customers.length === 1);
 
 	return (
 		<div className="flex flex-col gap-4">
@@ -342,9 +372,12 @@ export default function TicketsPage() {
 							id="ticket-customer"
 							type="search"
 							list="ticket-customer-options"
+							name="portal-ticket-customer-filter"
+							autoComplete="off"
 							placeholder="Customer name..."
 							className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 shadow-inner outline-none ring-violet-500/20 placeholder:text-slate-400 focus:border-violet-400 focus:ring-4"
 							value={customerDraft}
+							disabled={fixedCustomerFilter}
 							onChange={(e) => setCustomerDraft(e.target.value)}
 							onKeyDown={(e) => {
 								if (e.key === "Enter") {

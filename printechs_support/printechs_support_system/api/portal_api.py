@@ -528,14 +528,14 @@ def get_portal_assignment_users(limit: int = 200):
 
 @frappe.whitelist()
 def get_portal_ticket_customers():
-	"""Customers the current user may create Support Tickets for (portal)."""
+	"""Customers the current user may filter/create Support Tickets for (portal)."""
 	user = frappe.session.user
 	if user == "Guest":
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
 	if not user_can_access_support_portal(user):
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
 
-	if user_sees_all_support_records(user):
+	if user_has_unrestricted_support_ticket_catalog(user):
 		rows = frappe.get_all(
 			"Customer",
 			fields=["name", "customer_name"],
@@ -546,9 +546,23 @@ def get_portal_ticket_customers():
 			"customers": [{"name": r.name, "customer_name": (r.customer_name or r.name).strip()} for r in rows],
 		}
 
-	names = get_allowed_customers(user)
+	if user_sees_all_support_records(user):
+		scope = support_ticket_scope_filters_for_lists(user)
+		if scope.get("empty"):
+			return {"customers": []}
+		filters = {k: v for k, v in scope.items() if k != "empty"}
+		names = frappe.get_all(
+			"Support Ticket",
+			filters=filters or None,
+			pluck="customer",
+			distinct=True,
+			limit_page_length=500,
+		)
+	else:
+		names = get_allowed_customers(user)
+
 	out = []
-	for name in names:
+	for name in sorted({n for n in names if n}):
 		cn = frappe.db.get_value("Customer", name, "customer_name") or name
 		out.append({"name": name, "customer_name": str(cn).strip()})
 	return {"customers": out}
@@ -2459,17 +2473,18 @@ def update_portal_ticket_status(ticket_name: str, status: str):
 				_("Customers can only confirm resolution by setting status to Resolved."),
 				frappe.PermissionError,
 			)
-		deadline = frappe.db.get_value("Support Ticket", ticket_name, "customer_resolution_deadline")
-		if not deadline:
-			frappe.throw(
-				_("Your support team has not opened a confirmation window for this ticket yet."),
-				frappe.PermissionError,
-			)
-		if now_datetime() > get_datetime(deadline):
-			frappe.throw(_("The confirmation period has ended."), frappe.ValidationError)
 		cur = frappe.db.get_value("Support Ticket", ticket_name, "status")
 		if cur in _TERMINAL_TICKET_STATUSES:
 			frappe.throw(_("This ticket is already closed."), frappe.ValidationError)
+		if cur != "Waiting for Customer":
+			deadline = frappe.db.get_value("Support Ticket", ticket_name, "customer_resolution_deadline")
+			if not deadline:
+				frappe.throw(
+					_("Your support team has not opened a confirmation window for this ticket yet."),
+					frappe.PermissionError,
+				)
+			if now_datetime() > get_datetime(deadline):
+				frappe.throw(_("The confirmation period has ended."), frappe.ValidationError)
 
 	doc = _get_portal_doc("Support Ticket", ticket_name)
 	old = doc.status
@@ -2839,8 +2854,8 @@ def portal_upload_task_file():
 def get_portal_ticket_status_options(ticket_name: str | None = None):
 	"""Allowed ticket status values for the current user (portal).
 
-	Customers only see ``Resolved`` when a technician has started a confirmation window
-	(``customer_resolution_deadline``) that is still active. Pass ``ticket_name`` from the ticket detail page.
+	Customers see ``Resolved`` when the ticket is waiting for their confirmation, or when a technician
+	has started a confirmation window (``customer_resolution_deadline``) that is still active.
 	"""
 	user = frappe.session.user
 	if user == "Guest":
@@ -2857,6 +2872,8 @@ def get_portal_ticket_status_options(ticket_name: str | None = None):
 	st = frappe.db.get_value("Support Ticket", tn, "status")
 	if st in _TERMINAL_TICKET_STATUSES:
 		return {"options": []}
+	if st == "Waiting for Customer":
+		return {"options": ["Resolved"]}
 	deadline = frappe.db.get_value("Support Ticket", tn, "customer_resolution_deadline")
 	if not deadline:
 		return {"options": []}
