@@ -586,11 +586,16 @@ export function mockUpdatePortalTicket(
 	});
 }
 
-export function mockUpdatePortalTicketStatus(ticketName: string, status: string): Promise<{ ok: boolean; status: string }> {
+export function mockUpdatePortalTicketStatus(
+	ticketName: string,
+	status: string,
+	confirmationComment?: string,
+): Promise<{ ok: boolean; status: string }> {
 	const row = MOCK_PORTAL_TICKETS.find((t) => String(t.name) === ticketName);
 	if (row) {
 		(row as { status?: string }).status = status;
 	}
+	void confirmationComment;
 	return Promise.resolve({ ok: true, status });
 }
 

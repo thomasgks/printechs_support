@@ -148,6 +148,10 @@ def _email_activity_type(comment_type: str, *, author_is_internal: bool, is_inte
 	return kind or _("Comment")
 
 
+def _email_author_role(*, author_is_internal: bool) -> str:
+	return _("Technician") if author_is_internal else _("Customer")
+
+
 def notify_ticket_comment(
 	ticket_name: str,
 	*,
@@ -200,6 +204,7 @@ def notify_ticket_comment(
 			subject_line=subject_ticket,
 			kind=_("Internal note (not visible to customer)"),
 			author=author_name,
+			author_role=_email_author_role(author_is_internal=True),
 			body_text=body_preview,
 			link=link,
 		)
@@ -214,6 +219,7 @@ def notify_ticket_comment(
 		author_is_internal=author_is_internal,
 		is_internal_note=is_internal_note,
 	)
+	author_role = _email_author_role(author_is_internal=author_is_internal)
 
 	if author_is_internal:
 		customer_to = [e for e in customer_emails if e != author_em]
@@ -227,6 +233,7 @@ def notify_ticket_comment(
 				subject_line=subject_ticket,
 				kind=email_kind,
 				author=author_name,
+				author_role=author_role,
 				body_text=body_preview,
 				link=link,
 				for_customer=True,
@@ -257,6 +264,7 @@ def notify_ticket_comment(
 				subject_line=subject_ticket,
 				kind=email_kind,
 				author=author_name,
+				author_role=author_role,
 				body_text=body_preview,
 				link=link,
 				for_customer=False,
@@ -284,6 +292,7 @@ def notify_ticket_comment(
 		subject_line=subject_ticket,
 		kind=email_kind,
 		author=author_name,
+		author_role=_email_author_role(author_is_internal=False),
 		body_text=body_preview,
 		link=link,
 		for_customer=False,
@@ -300,6 +309,7 @@ def _html_email(
 	subject_line: str,
 	kind: str,
 	author: str,
+	author_role: str,
 	body_text: str,
 	link: str,
 	for_customer: bool = False,
@@ -319,6 +329,7 @@ def _html_email(
 <tr><td style="padding:4px 8px;color:#64748b;">{html_escape(_("Subject"))}</td><td style="padding:4px 8px;">{html_escape(subject_line)}</td></tr>
 <tr><td style="padding:4px 8px;color:#64748b;">{html_escape(_("Type"))}</td><td style="padding:4px 8px;">{html_escape(kind)}</td></tr>
 <tr><td style="padding:4px 8px;color:#64748b;">{html_escape(_("From"))}</td><td style="padding:4px 8px;">{html_escape(author)}</td></tr>
+<tr><td style="padding:4px 8px;color:#64748b;">{html_escape(_("Message Type"))}</td><td style="padding:4px 8px;"><strong>{html_escape(author_role or "—")}</strong></td></tr>
 </table>
 {ticket_description_html or ""}
 <p style="margin:0 0 8px;font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:0.04em;">{html_escape(_("Message"))}</p>

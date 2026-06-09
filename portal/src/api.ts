@@ -769,13 +769,17 @@ export function updatePortalTicket(
 	}>("printechs_support.printechs_support_system.api.portal_api.update_portal_ticket", args);
 }
 
-export function updatePortalTicketStatus(ticketName: string, status: string) {
+export function updatePortalTicketStatus(ticketName: string, status: string, confirmationComment?: string) {
 	if (isPortalMockDataEnabled()) {
-		return import("./portalMock").then((m) => m.mockUpdatePortalTicketStatus(ticketName, status));
+		return import("./portalMock").then((m) => m.mockUpdatePortalTicketStatus(ticketName, status, confirmationComment));
+	}
+	const args: Record<string, unknown> = { ticket_name: ticketName, status };
+	if (confirmationComment != null) {
+		args.confirmation_comment = confirmationComment;
 	}
 	return callMethod<{ ok: boolean; status: string }>(
 		"printechs_support.printechs_support_system.api.portal_api.update_portal_ticket_status",
-		{ ticket_name: ticketName, status },
+		args,
 	);
 }
 

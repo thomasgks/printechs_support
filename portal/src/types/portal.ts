@@ -1,8 +1,10 @@
 export type PortalComment = {
 	name?: string;
 	comment_type: string;
+	display_comment_type?: string;
 	comment_by: string;
 	author_name: string;
+	author_is_internal?: boolean;
 	comment_on: string | null;
 	is_customer_visible: number;
 	content: string;

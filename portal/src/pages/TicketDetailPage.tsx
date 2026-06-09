@@ -84,6 +84,7 @@ export default function TicketDetailPage() {
 	const [confirmationBusy, setConfirmationBusy] = useState(false);
 	const [customerConfirmBusy, setCustomerConfirmBusy] = useState(false);
 	const [customerConfirmErr, setCustomerConfirmErr] = useState<string | null>(null);
+	const [customerConfirmComment, setCustomerConfirmComment] = useState("");
 	const [dueEdit, setDueEdit] = useState("");
 	const [dueSaving, setDueSaving] = useState(false);
 	const [dueErr, setDueErr] = useState<string | null>(null);
@@ -280,10 +281,17 @@ export default function TicketDetailPage() {
 	}
 
 	async function confirmIssueFixed() {
+		const message = customerConfirmComment.trim();
+		if (!message) {
+			setCustomerConfirmErr(
+				"Before providing your final confirmation, please complete the application testing and include a brief summary of your testing observations and results.",
+			);
+			return;
+		}
 		setCustomerConfirmBusy(true);
 		setCustomerConfirmErr(null);
 		try {
-			const r = await updatePortalTicketStatus(String(doc.name), "Resolved");
+			const r = await updatePortalTicketStatus(String(doc.name), "Resolved", message);
 			setDoc((d) =>
 				d
 					? {
@@ -294,8 +302,8 @@ export default function TicketDetailPage() {
 						}
 					: d,
 			);
-			const so = await getPortalTicketStatusOptions(String(doc.name));
-			setStatusOptions(so.options ?? []);
+			setCustomerConfirmComment("");
+			navigate("/tickets", { replace: true });
 		} catch (e) {
 			setCustomerConfirmErr(e instanceof Error ? e.message : "Could not confirm the issue is fixed");
 		} finally {
@@ -363,8 +371,21 @@ export default function TicketDetailPage() {
 							<div className="rounded-2xl border border-emerald-200 bg-emerald-50/90 p-4 text-sm text-emerald-950 ring-1 ring-emerald-100">
 								<p className="font-bold">Please confirm after testing.</p>
 								<p className="mt-1 text-emerald-900/90">
-									If the issue is fixed and no further support is needed, click the button below.
+									Before providing your final confirmation, please complete the application testing and include a
+									brief summary of your testing observations and results.
 								</p>
+								<label className="mt-3 block">
+									<span className="text-xs font-bold uppercase tracking-wide text-emerald-900">
+										Testing observations and results
+									</span>
+									<textarea
+										className="mt-1 min-h-[5rem] w-full rounded-xl border border-emerald-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-inner outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-200/60 disabled:opacity-60"
+										value={customerConfirmComment}
+										disabled={customerConfirmBusy}
+										placeholder="Example: Tested after the fix and the issue is resolved."
+										onChange={(e) => setCustomerConfirmComment(e.target.value)}
+									/>
+								</label>
 								{customerConfirmErr ? <p className="mt-2 text-sm font-semibold text-red-700">{customerConfirmErr}</p> : null}
 								<button
 									type="button"

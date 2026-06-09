@@ -1552,7 +1552,12 @@ _CUSTOMER_VISIBLE_TASK_STATUSES = frozenset(
 )
 
 
-def _apply_support_ticket_status_via_portal(ticket_name: str, new_status: str, user: str) -> None:
+def _apply_support_ticket_status_via_portal(
+	ticket_name: str,
+	new_status: str,
+	user: str,
+	customer_confirmation_html: str | None = None,
+) -> None:
 	"""Set Support Ticket status (with workflow routing fields) and append a portal system comment.
 
 	Must keep ``action_required_from`` / ``current_owner_type`` aligned with ``status`` or
@@ -1585,6 +1590,17 @@ def _apply_support_ticket_status_via_portal(ticket_name: str, new_status: str, u
 	sync_waiting_side_fields(doc)
 	doc.flags.workflow_transition = True
 	try:
+		if customer_confirmation_html:
+			doc.append(
+				"comments",
+				{
+					"comment_type": "Customer Reply",
+					"comment_by": user,
+					"comment_on": frappe.utils.now(),
+					"is_customer_visible": 1,
+					"content": customer_confirmation_html,
+				},
+			)
 		doc.append(
 			"comments",
 			{
@@ -1658,6 +1674,7 @@ def _validate_portal_task_comment_attachment(file_name: str, task_name: str) -> 
 def _serialize_comment_row(row: dict, **extras) -> dict:
 	by = row.get("comment_by") or ""
 	full = frappe.db.get_value("User", by, "full_name") if by else ""
+	author_is_internal = user_sees_all_support_records(by) if by else False
 	att = row.get("attachment")
 	att_url = None
 	if att:
@@ -1667,13 +1684,20 @@ def _serialize_comment_row(row: dict, **extras) -> dict:
 	content = row.get("content") or ""
 	content = sanitize_html(content) if content else ""
 	reply_to = (row.get("in_reply_to") or "").strip() or None
+	comment_type = row.get("comment_type")
+	display_comment_type = comment_type
+	visible = int(row.get("is_customer_visible") or 0)
+	if visible and (comment_type or "").strip() in ("", "Comment", "Reply", "Customer Reply"):
+		display_comment_type = "Technician" if author_is_internal else "Customer"
 	out = {
 		"name": row.get("name"),
-		"comment_type": row.get("comment_type"),
+		"comment_type": comment_type,
+		"display_comment_type": display_comment_type,
 		"comment_by": by,
 		"author_name": full or by,
+		"author_is_internal": author_is_internal,
 		"comment_on": str(row.get("comment_on")) if row.get("comment_on") else None,
-		"is_customer_visible": int(row.get("is_customer_visible") or 0),
+		"is_customer_visible": visible,
 		"content": content,
 		"in_reply_to": reply_to,
 		"attachment": att,
@@ -2452,7 +2476,7 @@ def update_portal_task(
 
 
 @frappe.whitelist()
-def update_portal_ticket_status(ticket_name: str, status: str):
+def update_portal_ticket_status(ticket_name: str, status: str, confirmation_comment: str | None = None):
 	user = frappe.session.user
 	if user == "Guest":
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
@@ -2467,6 +2491,7 @@ def update_portal_ticket_status(ticket_name: str, status: str):
 	_assert_portal_ticket_access(user, ticket_name)
 
 	internal = user_sees_all_support_records(user)
+	customer_confirmation_html = None
 	if not internal:
 		if status != "Resolved":
 			frappe.throw(
@@ -2485,6 +2510,8 @@ def update_portal_ticket_status(ticket_name: str, status: str):
 				)
 			if now_datetime() > get_datetime(deadline):
 				frappe.throw(_("The confirmation period has ended."), frappe.ValidationError)
+		if (confirmation_comment or "").strip():
+			customer_confirmation_html = _clean_portal_comment_html(confirmation_comment)
 
 	doc = _get_portal_doc("Support Ticket", ticket_name)
 	old = doc.status
@@ -2494,7 +2521,7 @@ def update_portal_ticket_status(ticket_name: str, status: str):
 	# Workflow validates transitions by user role (see get_transitions). Portal users often lack
 	# the workflow "allowed" role even when the API permits the target status. Set status via DB
 	# (no workflow), then save only the new comment row so validate_workflow sees no transition.
-	_apply_support_ticket_status_via_portal(ticket_name, status, user)
+	_apply_support_ticket_status_via_portal(ticket_name, status, user, customer_confirmation_html)
 	return {"ok": True, "status": status}
 
 

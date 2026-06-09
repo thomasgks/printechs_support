@@ -87,7 +87,14 @@ function eventSort(a: HistoryEvent, b: HistoryEvent): number {
 }
 
 function commentTitle(row: PortalComment): string {
-	const type = asText(row.comment_type) || "Communication";
+	const rawType = asText(row.comment_type);
+	const type =
+		asText(row.display_comment_type) ||
+		(row.author_is_internal && row.is_customer_visible && ["", "Comment", "Reply", "Customer Reply"].includes(rawType)
+			? "Technician"
+			: row.is_customer_visible && ["", "Comment", "Reply", "Customer Reply"].includes(rawType)
+				? "Customer"
+			: rawType || "Communication");
 	const author = asText(row.author_name || row.comment_by) || "Unknown";
 	return `${type} by ${author}`;
 }
