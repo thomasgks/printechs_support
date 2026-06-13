@@ -12,6 +12,8 @@
   "fallback_customer",
   "section_email",
   "help_url",
+  "section_workflow",
+  "auto_close_resolved_after_days",
   "pending_ticket_report_interval_days",
   "pending_ticket_report_recipients",
   "pending_ticket_report_subject",
@@ -65,6 +67,19 @@
    "fieldname": "help_url",
    "fieldtype": "Data",
    "label": "Help URL"
+  },
+  {
+   "description": "Automatically close tickets that remain Resolved for this many days. Set 0 to disable auto-close.",
+   "fieldname": "section_workflow",
+   "fieldtype": "Section Break",
+   "label": "Ticket Workflow"
+  },
+  {
+   "default": "7",
+   "description": "Tickets in Resolved status are automatically moved to Closed after this many days. Set 0 to disable.",
+   "fieldname": "auto_close_resolved_after_days",
+   "fieldtype": "Int",
+   "label": "Auto Close Resolved Tickets After (Days)"
   },
   {
    "description": "Fallback email addresses for pending ticket reports, one per line or comma-separated. Team reports are sent to each Support Team's default email, team lead, and members. These fallback recipients are used for teams without emails and for unassigned tickets.",

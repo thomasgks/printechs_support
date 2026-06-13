@@ -1583,6 +1583,10 @@ def _apply_support_ticket_status_via_portal(
 	doc.status = new_status
 	doc.action_required_from = ar
 	doc.current_owner_type = cot
+	if new_status == "Resolved" and not doc.resolved_on:
+		doc.resolved_on = now_datetime()
+	if new_status == "Closed" and not doc.closed_on:
+		doc.closed_on = now_datetime()
 	if new_status in _TERMINAL_TICKET_STATUSES:
 		doc.customer_resolution_deadline = None
 		doc.customer_confirmation_required = 0

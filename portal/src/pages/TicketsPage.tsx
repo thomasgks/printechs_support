@@ -2,13 +2,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
 	getPortalBootstrap,
-	getPortalTicketCustomers,
 	getPortalTickets,
 	getPortalTicketTypes,
 	portalTicketNewPath,
 	portalTicketPath,
 } from "../api";
-import type { PortalBootstrapResult, PortalTicketCustomerRow, PortalTicketTypeRow } from "../api";
+import type { PortalBootstrapResult, PortalTicketTypeRow } from "../api";
 
 const TICKET_FILTER_STORAGE_KEY = "printechs_portal_ticket_filters";
 
@@ -81,8 +80,8 @@ export default function TicketsPage() {
 		? statusScopeFromUrl
 		: normalizeStatusScope(storedFilters.status_scope, storedFilters.show_all ? "all" : "active");
 	const [rows, setRows] = useState<Record<string, unknown>[]>([]);
+	const [availableRows, setAvailableRows] = useState<Record<string, unknown>[]>([]);
 	const [bootstrap, setBootstrap] = useState<PortalBootstrapResult | null>(null);
-	const [customerRows, setCustomerRows] = useState<PortalTicketCustomerRow[]>([]);
 	const [ticketTypeRows, setTicketTypeRows] = useState<PortalTicketTypeRow[]>([]);
 	const [ticketTypesLoaded, setTicketTypesLoaded] = useState(false);
 	const [err, setErr] = useState<string | null>(null);
@@ -134,15 +133,13 @@ export default function TicketsPage() {
 		let cancelled = false;
 		(async () => {
 			try {
-				const [boot, data] = await Promise.all([getPortalBootstrap(), getPortalTicketCustomers()]);
+				const boot = await getPortalBootstrap();
 				if (!cancelled) {
 					setBootstrap(boot);
-					setCustomerRows(data.customers ?? []);
 				}
 			} catch {
 				if (!cancelled) {
 					setBootstrap(null);
-					setCustomerRows([]);
 				}
 			}
 		})();
@@ -176,14 +173,23 @@ export default function TicketsPage() {
 		try {
 			const data = await getPortalTickets(200, {
 				search: appliedSearch.trim() || undefined,
-				customer: appliedCustomer.trim() || undefined,
 				ticketType: appliedTicketType.trim() || undefined,
 				activeOnly: statusScope === "active",
 			});
-			setRows(
+			const scopedRows =
 				statusScope === "resolved_closed"
 					? data.filter((row) => ["Resolved", "Closed"].includes(String(row.status ?? "")))
-					: data,
+					: data;
+			setAvailableRows(scopedRows);
+			const customer = appliedCustomer.trim().toLowerCase();
+			setRows(
+				customer
+					? scopedRows.filter((row) => {
+							const name = String(row.customer ?? "").trim().toLowerCase();
+							const label = String(row.customer_name || row.customer || "").trim().toLowerCase();
+							return name === customer || label === customer;
+						})
+					: scopedRows,
 			);
 		} catch (e) {
 			setErr(e instanceof Error ? e.message : "Failed to load");
@@ -220,23 +226,17 @@ export default function TicketsPage() {
 
 	const customerOptions = useMemo(() => {
 		const labels = new Map<string, string>();
-		for (const row of customerRows) {
-			const name = String(row.name ?? "").trim();
-			if (name) {
-				labels.set(name, String(row.customer_name || name).trim());
-			}
-		}
-		for (const row of rows) {
+		for (const row of availableRows) {
 			const name = String(row.customer ?? "").trim();
 			if (name && !labels.has(name)) {
-				labels.set(name, name);
+				labels.set(name, String(row.customer_name || name).trim());
 			}
 		}
 		if (customerDraft && !labels.has(customerDraft)) {
 			labels.set(customerDraft, customerDraft);
 		}
 		return Array.from(labels, ([name, label]) => ({ name, label })).sort((a, b) => a.label.localeCompare(b.label));
-	}, [customerDraft, customerRows, rows]);
+	}, [availableRows, customerDraft]);
 
 	const selectedCustomerName = useMemo(() => {
 		const raw = customerDraft.trim();
@@ -244,15 +244,15 @@ export default function TicketsPage() {
 			return "";
 		}
 		const rawLower = raw.toLowerCase();
-		for (const row of customerRows) {
-			const name = String(row.name ?? "").trim();
+		for (const row of availableRows) {
+			const name = String(row.customer ?? "").trim();
 			const label = String(row.customer_name || name).trim();
 			if (name.toLowerCase() === rawLower || label.toLowerCase() === rawLower) {
 				return name;
 			}
 		}
 		return "";
-	}, [customerDraft, customerRows]);
+	}, [availableRows, customerDraft]);
 
 	useEffect(() => {
 		let cancelled = false;

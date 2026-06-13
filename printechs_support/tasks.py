@@ -5,12 +5,13 @@ from html import escape as html_escape
 
 import frappe
 from frappe import _
-from frappe.utils import now_datetime, sanitize_html
+from frappe.utils import add_to_date, cint, now_datetime, sanitize_html
 
 from printechs_support.printechs_support_system.api.ticket_workflow import derive_workflow_routing_for_status
 
 
 _TERMINAL_TICKET_STATUSES = frozenset({"Resolved", "Closed", "Cancelled"})
+_DEFAULT_AUTO_CLOSE_RESOLVED_DAYS = 7
 
 
 def auto_resolve_support_tickets_past_deadline():
@@ -58,6 +59,7 @@ def auto_resolve_support_tickets_past_deadline():
 				"current_owner_type": cot,
 				"customer_resolution_deadline": None,
 				"customer_confirmation_required": 0,
+				"resolved_on": now,
 			},
 		)
 		doc = frappe.get_doc("Support Ticket", name)
@@ -84,6 +86,78 @@ def auto_resolve_support_tickets_past_deadline():
 			frappe.flags.ignore_permissions = prev
 
 
+def _auto_close_resolved_after_days() -> int:
+	try:
+		value = frappe.db.get_single_value(
+			"Printechs Support Settings",
+			"auto_close_resolved_after_days",
+		)
+	except Exception:
+		return _DEFAULT_AUTO_CLOSE_RESOLVED_DAYS
+	if value in (None, ""):
+		return _DEFAULT_AUTO_CLOSE_RESOLVED_DAYS
+	return max(cint(value), 0)
+
+
+def auto_close_resolved_support_tickets_past_deadline():
+	"""Mark long-resolved tickets Closed after the configured quiet period."""
+	days = _auto_close_resolved_after_days()
+	if days <= 0:
+		return
+
+	now = now_datetime()
+	cutoff = add_to_date(now, days=-days)
+	rows = frappe.db.sql(
+		"""
+		SELECT st.name, st.resolved_on
+		FROM `tabSupport Ticket` st
+		WHERE st.status = 'Resolved'
+			AND st.resolved_on IS NOT NULL
+			AND st.resolved_on < %(cutoff)s
+			AND st.closed_on IS NULL
+		""",
+		{"cutoff": cutoff},
+		as_dict=True,
+	)
+	for row in rows:
+		name = row.name
+		ar, cot = derive_workflow_routing_for_status("Closed")
+		frappe.db.set_value(
+			"Support Ticket",
+			name,
+			{
+				"status": "Closed",
+				"action_required_from": ar,
+				"current_owner_type": cot,
+				"closed_on": now,
+				"customer_resolution_deadline": None,
+				"customer_confirmation_required": 0,
+			},
+		)
+		doc = frappe.get_doc("Support Ticket", name)
+		prev = frappe.flags.ignore_permissions
+		frappe.flags.ignore_permissions = True
+		try:
+			doc.append(
+				"comments",
+				{
+					"comment_type": "System Update",
+					"comment_by": "Administrator",
+					"comment_on": frappe.utils.now(),
+					"is_customer_visible": 1,
+					"content": sanitize_html(
+						_(
+							"<p><strong>Status</strong> updated from <em>Resolved</em> to <em>Closed</em> "
+							"(auto-closed after {0} day(s) without further activity).</p>"
+						).format(days)
+					),
+				},
+			)
+			doc.save()
+		finally:
+			frappe.flags.ignore_permissions = prev
+
+
 def daily():
 	from printechs_support.printechs_support_system.api.agreement_portal import mark_expired_support_agreements
 	from printechs_support.printechs_support_system.api.pending_ticket_report_email import (
@@ -101,6 +175,7 @@ def daily():
 
 def hourly():
 	auto_resolve_support_tickets_past_deadline()
+	auto_close_resolved_support_tickets_past_deadline()
 	from printechs_support.printechs_support_system.api.support import update_overdue_flags
 
 	update_overdue_flags()
