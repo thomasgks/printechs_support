@@ -62,16 +62,48 @@ class SupportTask(Document):
 
 		sync_erpnext_task_from_support_task(self)
 
-		if self.flags.get("skip_due_sync"):
+		if not self.flags.get("skip_due_sync"):
+			prev = self.get_doc_before_save()
+			if prev and self.support_ticket and (prev.due_date or None) != (self.due_date or None):
+				from printechs_support.due_date_sync import sync_support_ticket_due_from_task
+
+				sync_support_ticket_due_from_task(self.name)
+
+		self._notify_new_task_comments()
+
+	def _notify_new_task_comments(self):
+		"""Email assignees / customer when task thread rows are added (Desk or import).
+
+		Portal ``add_portal_task_comment`` sets ``skip_comment_notification_hook`` and notifies explicitly.
+		"""
+		if self.flags.get("skip_comment_notification_hook"):
 			return
 		prev = self.get_doc_before_save()
-		if not prev or not self.support_ticket:
+		if not prev:
 			return
-		if (prev.due_date or None) == (self.due_date or None):
+		old_rows = prev.comments or []
+		new_rows = self.comments or []
+		if len(new_rows) <= len(old_rows):
 			return
-		from printechs_support.due_date_sync import sync_support_ticket_due_from_task
 
-		sync_support_ticket_due_from_task(self.name)
+		from printechs_support.permissions import user_sees_all_support_records
+		from printechs_support.printechs_support_system.api.ticket_comment_emails import notify_task_comment
+
+		for row in new_rows[len(old_rows) :]:
+			visible = int(row.is_customer_visible or 0)
+			is_internal_note = not bool(visible)
+			by = row.comment_by or frappe.session.user
+			try:
+				notify_task_comment(
+					self.name,
+					comment_type=row.comment_type or "Comment",
+					comment_by=by,
+					content_html=row.content or "",
+					is_internal_note=is_internal_note,
+					author_is_internal=user_sees_all_support_records(by),
+				)
+			except Exception:
+				frappe.log_error(frappe.get_traceback(), "Support Task comment notify (Desk)")
 
 	def sync_task_assignees(self):
 		sync_user_assignee_rows(self, child_field="task_assignees", primary_field="assigned_to_user")

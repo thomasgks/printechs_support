@@ -2296,23 +2296,22 @@ def add_portal_task_comment(
 		"comments",
 		row_data,
 	)
+	doc.flags.skip_comment_notification_hook = True
 	doc.save(ignore_permissions=True)
 
-	if visible and internal and doc.support_ticket:
-		from printechs_support.printechs_support_system.api.ticket_comment_emails import notify_ticket_comment
+	from printechs_support.printechs_support_system.api.ticket_comment_emails import notify_task_comment
 
-		try:
-			notify_ticket_comment(
-				doc.support_ticket,
-				comment_type=comment_type,
-				comment_by=user,
-				content_html=safe,
-				is_internal_note=False,
-				author_is_internal=True,
-				notify_team=False,
-			)
-		except Exception:
-			frappe.log_error(frappe.get_traceback(), "portal add_portal_task_comment notify")
+	try:
+		notify_task_comment(
+			task_name,
+			comment_type=comment_type,
+			comment_by=user,
+			content_html=safe,
+			is_internal_note=not bool(visible),
+			author_is_internal=internal,
+		)
+	except Exception:
+		frappe.log_error(frappe.get_traceback(), "portal add_portal_task_comment notify")
 
 	ts = (set_status or "").strip()
 	if ts:
