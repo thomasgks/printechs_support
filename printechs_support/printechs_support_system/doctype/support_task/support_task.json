@@ -63,6 +63,7 @@
    "label": "Task"
   },
   {
+   "default": "SUP-TSK-.YYYY.-.#####",
    "fieldname": "naming_series",
    "fieldtype": "Select",
    "label": "Series",

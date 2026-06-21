@@ -11,9 +11,13 @@ from printechs_support.assignee_sync import sync_user_assignee_rows
 
 
 _VALID_DIVISIONS = frozenset({"Software", "Industrial", "Retail"})
+_TASK_NAMING_SERIES = "SUP-TSK-.YYYY.-.#####"
 
 
 class SupportTask(Document):
+	def before_insert(self):
+		self._set_naming_series()
+
 	def validate(self):
 		self.validate_standalone_internal()
 		self.validate_source_project_task_unique()
@@ -22,6 +26,10 @@ class SupportTask(Document):
 		self.sync_task_assignees()
 		self.ensure_schedule_defaults()
 		self.update_delay_fields()
+
+	def _set_naming_series(self):
+		if not (self.naming_series or "").strip():
+			self.naming_series = _TASK_NAMING_SERIES
 
 	def validate_standalone_internal(self):
 		"""Support Ticket is optional; internal standalone tasks must have Division set."""
