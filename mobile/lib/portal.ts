@@ -257,12 +257,14 @@ export async function createPortalSupportTask(args: {
 	due_date?: string | null;
 	division?: string;
 	description?: string;
-}): Promise<{ name: string; subject: string; status: string; support_ticket: string | null; division?: string | null }> {
+	responsible_side?: 'Printechs' | 'Customer';
+}): Promise<{ name: string; subject: string; status: string; support_ticket: string | null; division?: string | null; responsible_side?: string; customer?: string | null }> {
 	const payload: Record<string, unknown> = {
 		subject: args.subject,
 		task_type: args.task_type ?? '',
 		due_date: args.due_date ?? '',
 		description: args.description?.trim() ?? '',
+		responsible_side: args.responsible_side ?? 'Printechs',
 	};
 	const st = (args.support_ticket ?? '').trim();
 	if (st) {

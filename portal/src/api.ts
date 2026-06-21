@@ -432,6 +432,8 @@ export function createPortalSupportTask(args: {
 	division?: string;
 	/** Optional plain text or HTML (server sanitizes). */
 	description?: string;
+	/** Printechs (default) or Customer — who must act on this task. */
+	responsible_side?: "Printechs" | "Customer";
 }) {
 	if (isPortalMockDataEnabled()) {
 		return import("./portalMock").then((m) => m.mockCreatePortalSupportTask(args));
@@ -441,6 +443,7 @@ export function createPortalSupportTask(args: {
 		task_type: args.task_type ?? "",
 		due_date: args.due_date ?? "",
 		description: args.description?.trim() ?? "",
+		responsible_side: args.responsible_side ?? "Printechs",
 	};
 	const st = (args.support_ticket ?? "").trim();
 	if (st) {
@@ -456,6 +459,8 @@ export function createPortalSupportTask(args: {
 		status: string;
 		support_ticket: string | null;
 		division?: string | null;
+		responsible_side?: string;
+		customer?: string | null;
 	}>("printechs_support.printechs_support_system.api.portal_api.create_portal_support_task", payload);
 }
 

@@ -36,6 +36,8 @@ const TASK_TYPES = [
 
 const DIVISIONS = ["Software", "Industrial", "Retail"] as const;
 
+type ResponsibleSide = "Printechs" | "Customer";
+
 export default function CreateTaskPage() {
 	const navigate = useNavigate();
 	const [searchParams] = useSearchParams();
@@ -50,7 +52,10 @@ export default function CreateTaskPage() {
 	const [description, setDescription] = useState("");
 	const [taskType, setTaskType] = useState<string>(TASK_TYPES[0]);
 	const [dueDate, setDueDate] = useState("");
-	/** Internal-only: who works the task (applied after create). */
+	const [responsibleSide, setResponsibleSide] = useState<ResponsibleSide>("Printechs");
+	const [ticketCustomer, setTicketCustomer] = useState("");
+	const [ticketCustomerName, setTicketCustomerName] = useState("");
+	/** Who works the task when responsibility is Printechs (applied after create). */
 	const [assignUsers, setAssignUsers] = useState<PortalAssignmentUserRow[]>([]);
 	const [assignPrimary, setAssignPrimary] = useState("");
 	const [assignCo, setAssignCo] = useState<string[]>([]);
@@ -122,7 +127,33 @@ export default function CreateTaskPage() {
 	const [assignUsersLoading, setAssignUsersLoading] = useState(false);
 
 	useEffect(() => {
-		if (!standaloneInternal) {
+		if (standaloneInternal || !supportTicket.trim()) {
+			setTicketCustomer("");
+			setTicketCustomerName("");
+			return;
+		}
+		let c = false;
+		(async () => {
+			try {
+				const doc = await getPortalTicket(supportTicket.trim());
+				if (!c) {
+					setTicketCustomer(String(doc.customer ?? "").trim());
+					setTicketCustomerName(String(doc.customer_name ?? "").trim());
+				}
+			} catch {
+				if (!c) {
+					setTicketCustomer("");
+					setTicketCustomerName("");
+				}
+			}
+		})();
+		return () => {
+			c = true;
+		};
+	}, [standaloneInternal, supportTicket]);
+
+	useEffect(() => {
+		if (responsibleSide !== "Printechs") {
 			setAssignPrimary("");
 			setAssignCo([]);
 			setAssignUsersLoading(false);
@@ -143,7 +174,7 @@ export default function CreateTaskPage() {
 		return () => {
 			c = true;
 		};
-	}, [standaloneInternal]);
+	}, [responsibleSide]);
 
 	function toggleCoAssignee(name: string) {
 		if (name === assignPrimary) return;
@@ -169,27 +200,30 @@ export default function CreateTaskPage() {
 			setErr("Task title is required");
 			return;
 		}
+		if (responsibleSide === "Customer" && standaloneInternal) {
+			setErr("Customer responsibility requires a linked support ticket.");
+			return;
+		}
+		if (responsibleSide === "Customer" && !standaloneInternal && !ticketCustomer) {
+			setErr("This ticket has no customer linked. Choose Printechs responsibility or pick another ticket.");
+			return;
+		}
 		setSaving(true);
 		try {
 			const desc = description.trim();
+			const base = {
+				subject: sub,
+				task_type: taskType,
+				due_date: dueDate.trim() ? localDatetimeToFrappe(dueDate) : null,
+				responsible_side: responsibleSide,
+				...(desc ? { description: desc } : {}),
+			};
 			const res = await createPortalSupportTask(
 				standaloneInternal
-					? {
-							subject: sub,
-							task_type: taskType,
-							due_date: dueDate.trim() ? localDatetimeToFrappe(dueDate) : null,
-							division,
-							...(desc ? { description: desc } : {}),
-						}
-					: {
-							support_ticket: tk,
-							subject: sub,
-							task_type: taskType,
-							due_date: dueDate.trim() ? localDatetimeToFrappe(dueDate) : null,
-							...(desc ? { description: desc } : {}),
-						},
+					? { ...base, division }
+					: { ...base, support_ticket: tk },
 			);
-			if (standaloneInternal) {
+			if (responsibleSide === "Printechs") {
 				const list = [assignPrimary.trim(), ...assignCo.filter((x) => x && x !== assignPrimary)].filter(Boolean);
 				if (list.length) {
 					try {
@@ -359,26 +393,67 @@ export default function CreateTaskPage() {
 						/>
 					</label>
 
-					{standaloneInternal ? (
+					<fieldset className="space-y-2 rounded-xl border border-slate-100 bg-slate-50/80 p-4">
+						<legend className="px-1 text-xs font-bold uppercase tracking-wide text-slate-500">Responsibility</legend>
+						<label className="flex cursor-pointer items-start gap-3 text-sm text-slate-800">
+							<input
+								type="radio"
+								name="responsible_side"
+								className="mt-1"
+								checked={responsibleSide === "Printechs"}
+								onChange={() => setResponsibleSide("Printechs")}
+								disabled={saving}
+							/>
+							<span>
+								<span className="font-semibold">Printechs</span>
+								<span className="block text-slate-600">Your team owns this work — assign one or more people below.</span>
+							</span>
+						</label>
+						<label className="flex cursor-pointer items-start gap-3 text-sm text-slate-800">
+							<input
+								type="radio"
+								name="responsible_side"
+								className="mt-1"
+								checked={responsibleSide === "Customer"}
+								onChange={() => setResponsibleSide("Customer")}
+								disabled={saving}
+							/>
+							<span>
+								<span className="font-semibold">Customer</span>
+								<span className="block text-slate-600">
+									The customer must act — linked from the ticket when one is selected.
+								</span>
+							</span>
+						</label>
+					</fieldset>
+
+					{responsibleSide === "Customer" ? (
+						<div className="rounded-xl border border-sky-100 bg-sky-50/80 px-4 py-3 text-sm text-slate-800">
+							<p className="text-xs font-bold uppercase tracking-wide text-sky-800/90">Customer</p>
+							{standaloneInternal ? (
+								<p className="mt-1 text-slate-600">
+									No ticket linked — customer responsibility applies when the task is linked to a support ticket.
+								</p>
+							) : ticketCustomer || ticketCustomerName ? (
+								<p className="mt-1 font-medium text-slate-900">
+									{ticketCustomerName || ticketCustomer}
+									{ticketCustomerName && ticketCustomer ? (
+										<span className="ml-1 font-normal text-slate-600">({ticketCustomer})</span>
+									) : null}
+								</p>
+							) : supportTicket.trim() ? (
+								<p className="mt-1 text-amber-900">Loading customer…</p>
+							) : (
+								<p className="mt-1 text-slate-600">Select a support ticket to link the customer.</p>
+							)}
+						</div>
+					) : (
 						<div className="rounded-2xl border border-violet-200/90 bg-gradient-to-br from-violet-50/90 to-indigo-50/40 p-5 shadow-sm">
-							<h2 className="font-['Syne',system-ui,sans-serif] text-base font-bold text-violet-950">
-								Schedule &amp; assignment
-							</h2>
+							<h2 className="font-['Syne',system-ui,sans-serif] text-base font-bold text-violet-950">Task assignment</h2>
 							<p className="mt-1 text-xs text-violet-900/85">
-								Set a due date and assign technicians or employees before finishing. Same controls as on the task
-								detail page.
+								Who will do this work? Primary assignee plus optional co-assignees (same as on the task detail page).
 							</p>
 							<div className="mt-4 space-y-4">
-								<label className="flex flex-col gap-1">
-									<span className="text-xs font-bold uppercase tracking-wide text-violet-900/80">Due (optional)</span>
-									<input
-										type="datetime-local"
-										className="rounded-xl border border-violet-200/80 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-violet-400"
-										value={dueDate}
-										onChange={(e) => setDueDate(e.target.value)}
-										disabled={saving}
-									/>
-								</label>
 								<label className="flex flex-col gap-1">
 									<span className="text-xs font-bold uppercase tracking-wide text-violet-900/80">Primary assignee</span>
 									<select
@@ -430,17 +505,18 @@ export default function CreateTaskPage() {
 								</div>
 							</div>
 						</div>
-					) : (
-						<label className="flex flex-col gap-1 text-sm font-semibold text-slate-800">
-							Due (optional)
-							<input
-								type="datetime-local"
-								className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900"
-								value={dueDate}
-								onChange={(e) => setDueDate(e.target.value)}
-							/>
-						</label>
 					)}
+
+					<label className="flex flex-col gap-1 text-sm font-semibold text-slate-800">
+						Due (optional)
+						<input
+							type="datetime-local"
+							className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900"
+							value={dueDate}
+							onChange={(e) => setDueDate(e.target.value)}
+							disabled={saving}
+						/>
+					</label>
 
 					<div className="flex flex-wrap gap-3 pt-2">
 						<button

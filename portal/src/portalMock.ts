@@ -815,17 +815,21 @@ export function mockCreatePortalSupportTask(args: {
 	due_date?: string | null;
 	division?: string;
 	description?: string;
+	responsible_side?: "Printechs" | "Customer";
 }): Promise<{
 	name: string;
 	subject: string;
 	status: string;
 	support_ticket: string | null;
 	division?: string | null;
+	responsible_side?: string;
+	customer?: string | null;
 }> {
 	void args.task_type;
 	void args.due_date;
 	void args.description;
 	const tk = (args.support_ticket ?? "").trim();
+	const rs = args.responsible_side ?? "Printechs";
 	if (!tk) {
 		return Promise.resolve({
 			name: "SUP-TSK-MOCK-00099",
@@ -833,6 +837,8 @@ export function mockCreatePortalSupportTask(args: {
 			status: "Open",
 			support_ticket: null,
 			division: (args.division ?? "Software").trim() || "Software",
+			responsible_side: rs,
+			customer: null,
 		});
 	}
 	return Promise.resolve({
@@ -841,6 +847,8 @@ export function mockCreatePortalSupportTask(args: {
 		status: "Open",
 		support_ticket: tk,
 		division: null,
+		responsible_side: rs,
+		customer: MOCK_PORTAL_BOOTSTRAP.customers[0] || "Acme Corporation",
 	});
 }
 

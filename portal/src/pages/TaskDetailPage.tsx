@@ -169,6 +169,8 @@ export default function TaskDetailPage() {
 		portalBoolOrNull(doc.can_edit_task_schedule) ?? internal;
 	const au = doc.assigned_users;
 	const assigneesList = Array.isArray(au) ? (au as unknown[]).map((x) => String(x)) : [];
+	const responsibleSide = String(doc.responsible_side ?? "Printechs").trim() || "Printechs";
+	const showPrintechsAssignment = internal && responsibleSide === "Printechs";
 	const stBadge = statusBadgeClasses(status);
 
 	return (
@@ -296,7 +298,7 @@ export default function TaskDetailPage() {
 				</div>
 			</section>
 
-			{internal ? (
+			{showPrintechsAssignment ? (
 				<TechnicianTaskAssignment
 					taskName={String(doc.name)}
 					initialAssignees={assigneesList}

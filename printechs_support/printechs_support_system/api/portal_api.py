@@ -750,6 +750,9 @@ def _wire_portal_task_rows(tasks: list) -> None:
 		t["assigned_users"] = amap.get(t["name"], [])
 
 
+_VALID_TASK_RESPONSIBLE_SIDES = frozenset({"Printechs", "Customer", "Shared"})
+
+
 @frappe.whitelist()
 def create_portal_support_task(
 	support_ticket: str | None = None,
@@ -758,12 +761,14 @@ def create_portal_support_task(
 	due_date: str | None = None,
 	division: str | None = None,
 	description: str | None = None,
+	responsible_side: str | None = None,
 ):
 	"""Create a Support Task from the portal.
 
 	- With **support_ticket**: any portal user who can see that ticket (scoped customers or internal).
 	- Without ticket (**internal team only**): standalone internal task; **division** must be Software / Industrial / Retail.
 	- **description**: optional; plain text or HTML (sanitized).
+	- **responsible_side**: Printechs / Customer / Shared (default Printechs). Customer is linked from the ticket when set.
 	"""
 	user = frappe.session.user
 	if user == "Guest":
@@ -801,12 +806,17 @@ def create_portal_support_task(
 	if tt not in valid_types:
 		frappe.throw(_("Invalid task type"), frappe.ValidationError)
 
+	rs = (responsible_side or "Printechs").strip()
+	if rs not in _VALID_TASK_RESPONSIBLE_SIDES:
+		frappe.throw(_("Invalid responsible side"), frappe.ValidationError)
+
 	rows: dict = {
 		"doctype": "Support Task",
 		"naming_series": "SUP-TSK-.YYYY.-.#####",
 		"subject": subject,
 		"task_type": tt,
 		"status": "Open",
+		"responsible_side": rs,
 	}
 	if ticket_name:
 		rows["support_ticket"] = ticket_name
@@ -836,6 +846,8 @@ def create_portal_support_task(
 		"status": doc.status,
 		"support_ticket": doc.support_ticket or None,
 		"division": doc.division or None,
+		"responsible_side": doc.responsible_side or "Printechs",
+		"customer": doc.customer or None,
 	}
 
 
