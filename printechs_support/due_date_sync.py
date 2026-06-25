@@ -24,6 +24,8 @@ def sync_support_ticket_due_from_task(task_name: str) -> None:
 		return
 	ticket.due_date = row.due_date
 	ticket.flags.ignore_permissions = True
+	# Task due edits must not push the same date onto every sibling task on the ticket.
+	ticket.flags.skip_propagate_due_to_tasks = True
 	ticket.save()
 
 

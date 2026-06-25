@@ -5,6 +5,8 @@
 
 import type { PortalBootstrapResult } from "./api";
 import type { CalendarEventItem } from "./calendarUtils";
+import type { PortalTaskSort } from "./lib/taskSort";
+import { sortPortalTasks } from "./lib/taskSort";
 import type { PortalComment, PortalFileRow } from "./types/portal";
 
 const MOCK_SESSION_KEY = "printechs_portal_mock";
@@ -856,19 +858,23 @@ export function mockCreatePortalSupportTask(args: {
 export function mockGetPortalTasksForTicket(
 	ticketName: string,
 	limit: number,
+	sortBy: PortalTaskSort = "task",
 ): Promise<Record<string, unknown>[]> {
 	const q = ticketName.trim();
 	let rows = MOCK_PORTAL_TASKS.filter((t) => String(t.support_ticket ?? "") === q);
 	rows = rows.slice(0, Math.min(limit, rows.length));
 	return Promise.resolve(
-		rows.map((t) => {
-			const d = t.due_date;
-			const cal =
-				typeof d === "string" && d.length >= 10 && d[4] === "-" && d[7] === "-"
-					? d.slice(0, 10)
-					: null;
-			return { ...t, due_date_calendar: cal };
-		}),
+		sortPortalTasks(
+			rows.map((t) => {
+				const d = t.due_date;
+				const cal =
+					typeof d === "string" && d.length >= 10 && d[4] === "-" && d[7] === "-"
+						? d.slice(0, 10)
+						: null;
+				return { ...t, due_date_calendar: cal };
+			}),
+			sortBy,
+		),
 	);
 }
 

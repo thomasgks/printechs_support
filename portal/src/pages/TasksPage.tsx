@@ -1,8 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { getPortalBootstrap, getPortalTasks, portalTaskNewPath, portalTaskPath, portalTicketPath } from "../api";
+import { getPortalBootstrap, getPortalTasks, portalTaskNewPath, portalTaskPath, portalTicketPath, type PortalTaskSort } from "../api";
 import { formatPortalAssignees } from "../lib/assignees";
 import { statusBadgeClasses } from "../lib/status";
+import {
+	PORTAL_TASK_SORT_OPTIONS,
+	readPortalTaskSortPreference,
+	writePortalTaskSortPreference,
+} from "../lib/taskSort";
 
 const TERMINAL = new Set(["Completed", "Cancelled"]);
 
@@ -36,13 +41,15 @@ export default function TasksPage() {
 	const [filterStatus, setFilterStatus] = useState("");
 	const [filterCustomer, setFilterCustomer] = useState("");
 	const [filterDelayOwner, setFilterDelayOwner] = useState("");
+	const [sortBy, setSortBy] = useState<PortalTaskSort>(() => readPortalTaskSortPreference());
 	const [internalUser, setInternalUser] = useState(false);
 
 	useEffect(() => {
 		let c = false;
+		setLoading(true);
 		(async () => {
 			try {
-				const [data, boot] = await Promise.all([getPortalTasks(100), getPortalBootstrap()]);
+				const [data, boot] = await Promise.all([getPortalTasks(100, sortBy), getPortalBootstrap()]);
 				if (!c) {
 					setRows(data);
 					if (boot.logged_in && "internal" in boot) {
@@ -62,7 +69,12 @@ export default function TasksPage() {
 		return () => {
 			c = true;
 		};
-	}, []);
+	}, [sortBy]);
+
+	function onSortChange(next: PortalTaskSort) {
+		setSortBy(next);
+		writePortalTaskSortPreference(next);
+	}
 
 	const customers = useMemo(() => {
 		const s = new Set<string>();
@@ -228,6 +240,33 @@ export default function TasksPage() {
 						))}
 					</select>
 				</label>
+				<fieldset className="flex min-w-[220px] flex-col gap-2 border-0 p-0">
+					<legend className="text-xs font-semibold uppercase tracking-wide text-slate-500">Sort by</legend>
+					<div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Sort tasks">
+						{PORTAL_TASK_SORT_OPTIONS.map((opt) => (
+							<label
+								key={opt.value}
+								className={`inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium shadow-sm ${
+									sortBy === opt.value
+										? "border-blue-400 bg-blue-50 text-blue-900"
+										: "border-slate-200 bg-slate-50 text-slate-700 hover:border-blue-200"
+								}`}
+							>
+								<input
+									type="radio"
+									name="task-sort"
+									className="h-4 w-4 border-slate-300 text-blue-600 focus:ring-blue-500"
+									checked={sortBy === opt.value}
+									onChange={() => onSortChange(opt.value)}
+								/>
+								{opt.label}
+								{opt.default ? (
+									<span className="text-xs font-normal text-slate-500">(default)</span>
+								) : null}
+							</label>
+						))}
+					</div>
+				</fieldset>
 			</div>
 
 			{view === "table" ? (

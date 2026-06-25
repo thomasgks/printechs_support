@@ -19,6 +19,7 @@ class SupportTask(Document):
 		self._set_naming_series()
 
 	def validate(self):
+		self._set_naming_series()
 		self.validate_standalone_internal()
 		self.validate_source_project_task_unique()
 		self.validate_predecessor()

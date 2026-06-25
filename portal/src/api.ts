@@ -1,3 +1,5 @@
+import type { PortalTaskSort } from "./lib/taskSort";
+import { sortPortalTasks } from "./lib/taskSort";
 import {
 	isPortalMockDataEnabled,
 	MOCK_DASHBOARD_STATS,
@@ -286,34 +288,43 @@ export function getContextualHelp(args: {
 	}>("printechs_support.api.help_article.get_contextual_help", args);
 }
 
-export function getPortalTasks(limit = 50) {
+export type { PortalTaskSort } from "./lib/taskSort";
+
+export function getPortalTasks(limit = 50, sortBy: PortalTaskSort = "task") {
 	if (isPortalMockDataEnabled()) {
 		const rows = MOCK_PORTAL_TASKS.slice(0, Math.min(limit, MOCK_PORTAL_TASKS.length));
 		return Promise.resolve(
-			rows.map((t) => {
-				const d = t.due_date;
-				const cal =
-					typeof d === "string" && d.length >= 10 && d[4] === "-" && d[7] === "-"
-						? d.slice(0, 10)
-						: null;
-				return { ...t, due_date_calendar: cal };
-			}),
+			sortPortalTasks(
+				rows.map((t) => {
+					const d = t.due_date;
+					const cal =
+						typeof d === "string" && d.length >= 10 && d[4] === "-" && d[7] === "-"
+							? d.slice(0, 10)
+							: null;
+					return { ...t, due_date_calendar: cal };
+				}),
+				sortBy,
+			),
 		);
 	}
 	return callMethod<Record<string, unknown>[]>(
 		"printechs_support.printechs_support_system.api.portal_api.get_portal_tasks",
-		{ limit },
+		{ limit, sort_by: sortBy },
 	);
 }
 
 /** Tasks linked to a ticket (same fields as getPortalTasks). */
-export function getPortalTasksForTicket(ticketName: string, limit = 100) {
+export function getPortalTasksForTicket(
+	ticketName: string,
+	limit = 100,
+	sortBy: PortalTaskSort = "task",
+) {
 	if (isPortalMockDataEnabled()) {
-		return import("./portalMock").then((m) => m.mockGetPortalTasksForTicket(ticketName, limit));
+		return import("./portalMock").then((m) => m.mockGetPortalTasksForTicket(ticketName, limit, sortBy));
 	}
 	return callMethod<Record<string, unknown>[]>(
 		"printechs_support.printechs_support_system.api.portal_api.get_portal_tasks_for_ticket",
-		{ ticket_name: ticketName.trim(), limit },
+		{ ticket_name: ticketName.trim(), limit, sort_by: sortBy },
 	);
 }
 

@@ -738,6 +738,57 @@ _PORTAL_TASK_LIST_FIELDS = [
 	"creation",
 ]
 
+# Task list sort modes for portal API (see _sort_portal_task_rows).
+_VALID_PORTAL_TASK_SORT = frozenset({"task", "ticket", "due_date", "last_update"})
+
+
+def _normalize_portal_task_sort(sort_by: str | None = None) -> str:
+	sort = (sort_by or "task").strip().lower()
+	if sort not in _VALID_PORTAL_TASK_SORT:
+		return "task"
+	return sort
+
+
+def _sort_portal_task_rows(tasks: list, sort_by: str | None = None) -> None:
+	"""Sort task rows in place. Uses Python to avoid Frappe order_by SQL restrictions."""
+	sort = _normalize_portal_task_sort(sort_by)
+	if sort == "last_update":
+		tasks.sort(
+			key=lambda r: (str(r.get("modified") or ""), str(r.get("name") or "")),
+			reverse=True,
+		)
+		return
+	if sort == "due_date":
+		tasks.sort(
+			key=lambda r: (
+				0 if r.get("due_date") else 1,
+				str(r.get("due_date") or ""),
+				str(r.get("name") or ""),
+			)
+		)
+		return
+	if sort == "ticket":
+		tasks.sort(
+			key=lambda r: (str(r.get("support_ticket") or "\uffff"), str(r.get("name") or ""))
+		)
+		return
+	# task (default): by task ID / number ascending.
+	tasks.sort(key=lambda r: str(r.get("name") or ""))
+
+
+def _fetch_portal_tasks(filters: dict | None, limit: int, sort_by: str | None = None) -> list:
+	"""Load Support Task rows for portal lists with safe SQL order + Python sort."""
+	tasks = frappe.get_all(
+		"Support Task",
+		filters=filters or None,
+		fields=_PORTAL_TASK_LIST_FIELDS,
+		order_by="name asc",
+		limit_page_length=limit,
+	)
+	_sort_portal_task_rows(tasks, sort_by)
+	_wire_portal_task_rows(tasks)
+	return tasks
+
 
 def _wire_portal_task_rows(tasks: list) -> None:
 	"""Mutate get_all rows: due_date wire + assigned_users."""
@@ -942,7 +993,7 @@ def get_portal_tickets(
 
 
 @frappe.whitelist()
-def get_portal_tasks(limit: int = 50):
+def get_portal_tasks(limit: int = 50, sort_by: str | None = None):
 	user = frappe.session.user
 	if user == "Guest":
 		frappe.throw(_("Not permitted"), frappe.PermissionError)
@@ -954,20 +1005,11 @@ def get_portal_tasks(limit: int = 50):
 		return []
 
 	task_filters = {k: v for k, v in scope.items() if k != "empty"}
-	tasks = frappe.get_all(
-		"Support Task",
-		filters=task_filters or None,
-		fields=_PORTAL_TASK_LIST_FIELDS,
-		order_by="modified desc",
-		limit_page_length=limit,
-	)
-
-	_wire_portal_task_rows(tasks)
-	return tasks
+	return _fetch_portal_tasks(task_filters, limit, sort_by)
 
 
 @frappe.whitelist()
-def get_portal_tasks_for_ticket(ticket_name: str, limit: int = 100):
+def get_portal_tasks_for_ticket(ticket_name: str, limit: int = 100, sort_by: str | None = None):
 	"""Tasks linked to a ticket (portal). Respects the same ticket access rules as get_portal_ticket."""
 	user = frappe.session.user
 	if user == "Guest":
@@ -982,15 +1024,7 @@ def get_portal_tasks_for_ticket(ticket_name: str, limit: int = 100):
 	_assert_portal_ticket_access(user, name)
 
 	limit = min(int(limit), 300)
-	tasks = frappe.get_all(
-		"Support Task",
-		filters={"support_ticket": name},
-		fields=_PORTAL_TASK_LIST_FIELDS,
-		order_by="modified desc",
-		limit_page_length=limit,
-	)
-	_wire_portal_task_rows(tasks)
-	return tasks
+	return _fetch_portal_tasks({"support_ticket": name}, limit, sort_by)
 
 
 # Resolved still allows customer confirmation / structured workflow replies.

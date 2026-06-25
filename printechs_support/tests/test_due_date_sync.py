@@ -50,6 +50,30 @@ class TestDueDateSync(FrappeTestCase):
 		self.assertIsNotNone(ticket_due)
 		self.assertEqual(get_datetime(ticket_due), get_datetime(payload))
 
+	def test_task_due_edit_does_not_overwrite_sibling_tasks(self):
+		"""Editing one task due date must not push that date to other tasks on the same ticket."""
+		frappe.set_user("Administrator")
+		ticket_name, task_a = _ticket_and_task()
+		task_b = frappe.get_doc(
+			{
+				"doctype": "Support Task",
+				"naming_series": "SUP-TSK-.YYYY.-.#####",
+				"support_ticket": ticket_name,
+				"subject": "Sibling task",
+				"status": "Open",
+				"responsible_side": "Printechs",
+				"due_date": "2030-06-01 10:00:00",
+			}
+		)
+		task_b.insert(ignore_permissions=True)
+
+		portal_api.update_portal_task_due_date(task_a, "2030-07-01 16:00:00")
+
+		self.assertEqual(
+			get_datetime(frappe.db.get_value("Support Task", task_b.name, "due_date")),
+			get_datetime("2030-06-01 10:00:00"),
+		)
+
 	def test_ticket_due_syncs_to_tasks_via_portal_api(self):
 		frappe.set_user("Administrator")
 		ticket_name, task_name = _ticket_and_task()

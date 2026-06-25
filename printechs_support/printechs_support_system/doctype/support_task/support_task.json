@@ -68,7 +68,7 @@
    "fieldtype": "Select",
    "label": "Series",
    "options": "SUP-TSK-.YYYY.-.#####",
-   "reqd": 1,
+   "reqd": 0,
    "no_copy": 1,
    "set_only_once": 1,
    "print_hide": 1
@@ -383,8 +383,8 @@
   }
  ],
  "search_fields": "subject,support_ticket",
- "sort_field": "modified",
- "sort_order": "DESC",
+ "sort_field": "name",
+ "sort_order": "ASC",
  "states": [],
  "title_field": "subject",
  "track_changes": 1

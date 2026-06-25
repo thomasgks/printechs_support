@@ -144,8 +144,9 @@ class SupportTicket(Document):
 				author_is_internal=user_sees_all_support_records(by),
 			)
 
-		# Ticket due date → all tasks (manager / Desk). SQL only; does not recurse into task hooks.
-		if not self.flags.get("skip_due_sync") and prev:
+		# Ticket due date → all tasks when edited on the ticket (manager / Desk / portal ticket).
+		# Skip when due was mirrored from a single task edit (see due_date_sync.sync_support_ticket_due_from_task).
+		if not self.flags.get("skip_due_sync") and not self.flags.get("skip_propagate_due_to_tasks") and prev:
 			if (prev.due_date or None) != (self.due_date or None):
 				from printechs_support.due_date_sync import propagate_support_ticket_due_to_tasks
 
