@@ -1,0 +1,56 @@
+{
+ "actions": [],
+ "creation": "2026-07-03 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "role",
+  "content",
+  "source_type",
+  "source_reference",
+  "sources_json"
+ ],
+ "fields": [
+  {
+   "fieldname": "role",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Role",
+   "options": "User\nAssistant",
+   "reqd": 1
+  },
+  {
+   "fieldname": "content",
+   "fieldtype": "Text",
+   "in_list_view": 1,
+   "label": "Content",
+   "reqd": 1
+  },
+  {
+   "fieldname": "source_type",
+   "fieldtype": "Select",
+   "label": "Source Type",
+   "options": "\nFAQ\nHelp Article\nOpenAI\nSystem\nEscalation"
+  },
+  {
+   "fieldname": "source_reference",
+   "fieldtype": "Data",
+   "label": "Source Reference"
+  },
+  {
+   "fieldname": "sources_json",
+   "fieldtype": "Small Text",
+   "label": "Sources JSON"
+  }
+ ],
+ "istable": 1,
+ "links": [],
+ "modified": "2026-07-03 00:00:00.000000",
+ "module": "Printechs Support System",
+ "name": "PRAI Chat Message",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "ASC"
+}

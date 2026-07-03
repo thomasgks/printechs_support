@@ -70,6 +70,12 @@ function NavIcon({ name }: { name: string }) {
 					<path d="M9.5 9a2.5 2.5 0 015 0c0 1.8-2.5 2.2-2.5 4M12 17h.01" strokeLinecap="round" strokeLinejoin="round" />
 				</svg>
 			);
+		case "assistant":
+			return (
+				<svg className={common} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+					<path d="M21 15a4 4 0 01-4 4H8l-5 3V7a4 4 0 014-4h10a4 4 0 014 4v8z" strokeLinecap="round" strokeLinejoin="round" />
+				</svg>
+			);
 		default:
 			return null;
 	}
@@ -83,13 +89,22 @@ const nav = [
 	{ to: "/calendar", label: "Calendar", icon: "calendar" },
 	{ to: "/reports", label: "Reports", icon: "report", internalOnly: true },
 	{ to: "/customers", label: "Customers", icon: "users", internalOnly: true },
+	{ to: "/assistant", label: "PRAI Assistant", icon: "assistant", praiOnly: true },
 	{ href: "__HELP_URL__", label: "Help", icon: "help" },
 	{ to: "/settings", label: "Settings", icon: "settings", internalOnly: true },
 ] as const;
 
 export default function AppShell({ bootstrap, children }: ShellProps) {
 	const [signingOut, setSigningOut] = useState(false);
-	const visibleNav = nav.filter((item) => !("internalOnly" in item) || !item.internalOnly || bootstrap.internal);
+	const visibleNav = nav.filter((item) => {
+		if ("internalOnly" in item && item.internalOnly && !bootstrap.internal) {
+			return false;
+		}
+		if ("praiOnly" in item && item.praiOnly && !bootstrap.prai_enabled) {
+			return false;
+		}
+		return true;
+	});
 	const initial = (bootstrap.full_name || bootstrap.user || "?")
 		.split(/\s+/)
 		.map((s) => s[0])

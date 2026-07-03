@@ -12,6 +12,13 @@
   "fallback_customer",
   "section_email",
   "help_url",
+  "section_prai",
+  "enable_prai_mvp",
+  "section_prai_openai",
+  "enable_openai",
+  "enable_openai_chat",
+  "openai_model",
+  "openai_api_key",
   "section_workflow",
   "auto_close_resolved_after_days",
   "pending_ticket_report_interval_days",
@@ -67,6 +74,56 @@
    "fieldname": "help_url",
    "fieldtype": "Data",
    "label": "Help URL"
+  },
+  {
+   "description": "PRAI (Printechs Retail AI Assistant) on the Support Portal. MVP uses FAQ and Help Center search; disable until you are ready to roll out.",
+   "fieldname": "section_prai",
+   "fieldtype": "Section Break",
+   "label": "PRAI (Portal Assistant)"
+  },
+  {
+   "default": "0",
+   "description": "Show the PRAI assistant entry in the Support Portal (FAQ-based MVP).",
+   "fieldname": "enable_prai_mvp",
+   "fieldtype": "Check",
+   "label": "Enable PRAI MVP on Portal"
+  },
+  {
+   "depends_on": "eval:doc.enable_prai_mvp",
+   "description": "OpenAI powers PRAI FAQ Import and optional AI chat answers when FAQ/Help do not match.",
+   "fieldname": "section_prai_openai",
+   "fieldtype": "Section Break",
+   "label": "OpenAI (PRAI)"
+  },
+  {
+   "default": "0",
+   "depends_on": "eval:doc.enable_prai_mvp",
+   "description": "Master switch for OpenAI API usage (FAQ Import and chat answers). Requires a valid API key.",
+   "fieldname": "enable_openai",
+   "fieldtype": "Check",
+   "label": "Enable OpenAI"
+  },
+  {
+   "default": "1",
+   "depends_on": "eval:doc.enable_openai",
+   "description": "When enabled, PRAI answers any portal question using OpenAI with FAQ/Help context. Verified FAQ matches are still used first.",
+   "fieldname": "enable_openai_chat",
+   "fieldtype": "Check",
+   "label": "Enable AI Chat Answers"
+  },
+  {
+   "default": "gpt-4o-mini",
+   "depends_on": "eval:doc.enable_openai",
+   "description": "OpenAI model name (for example gpt-4o-mini). Used only when OpenAI is enabled.",
+   "fieldname": "openai_model",
+   "fieldtype": "Data",
+   "label": "OpenAI Model"
+  },
+  {
+   "depends_on": "eval:doc.enable_openai",
+   "fieldname": "openai_api_key",
+   "fieldtype": "Password",
+   "label": "OpenAI API Key"
   },
   {
    "description": "Automatically close tickets that remain Resolved for this many days. Set 0 to disable auto-close.",

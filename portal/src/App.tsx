@@ -12,6 +12,7 @@ import CreateTaskPage from "./pages/CreateTaskPage";
 import TaskDetailPage from "./pages/TaskDetailPage";
 import TasksPage from "./pages/TasksPage";
 import CreateTicketPage from "./pages/CreateTicketPage";
+import AssistantPage from "./pages/AssistantPage";
 import TicketDetailPage from "./pages/TicketDetailPage";
 import TicketsPage from "./pages/TicketsPage";
 
@@ -126,6 +127,9 @@ export default function App() {
 						/>
 					}
 				/>
+				{bootstrap.prai_enabled ? (
+					<Route path="/assistant" element={<AssistantPage />} />
+				) : null}
 				<Route path="*" element={<Navigate to="/" replace />} />
 			</Routes>
 		</AppShell>

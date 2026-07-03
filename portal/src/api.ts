@@ -1,4 +1,8 @@
 import type { PortalTaskSort } from "./lib/taskSort";
+import type { PortalTaskSort } from "./lib/taskSort";
+import { sortPortalTasks } from "./lib/taskSort";
+import { sortPortalTasks } from "./lib/taskSort";
+import type { PortalTaskSort } from "./lib/taskSort";
 import { sortPortalTasks } from "./lib/taskSort";
 import {
 	isPortalMockDataEnabled,
@@ -135,9 +139,47 @@ export type PortalBootstrapResult =
 			customers: string[];
 			internal: boolean;
 			help_url: string;
+			prai_enabled?: boolean;
+			prai_openai_enabled?: boolean;
 			brand_logo?: string;
 			brand_name?: string;
 	  };
+
+export type PraiSource = {
+	type: string;
+	name: string;
+	title: string;
+	summary?: string;
+	url?: string;
+};
+
+export type PraiChatMessage = {
+	name?: string;
+	role: "User" | "Assistant";
+	content: string;
+	source_type?: string;
+	source_reference?: string;
+	sources?: PraiSource[];
+	created_at?: string;
+};
+
+export type PraiChatSession = {
+	name: string;
+	title?: string;
+	status?: string;
+	customer?: string;
+	support_ticket?: string;
+	modified?: string;
+	messages?: PraiChatMessage[];
+};
+
+export type PraiAskResult = {
+	success: boolean;
+	session: PraiChatSession;
+	message: PraiChatMessage;
+	suggest_escalation?: boolean;
+	can_escalate?: boolean;
+};
 
 export async function callMethod<T>(method: string, args: Record<string, unknown> = {}): Promise<T> {
 	const csrf = await resolveCsrfToken();
@@ -215,6 +257,41 @@ export function getPortalBootstrap() {
 	}
 	return callMethod<PortalBootstrapResult>(
 		"printechs_support.printechs_support_system.api.portal_api.get_portal_bootstrap",
+	);
+}
+
+export function praiAsk(message: string, sessionId?: string) {
+	return callMethod<PraiAskResult>("printechs_support.printechs_support_system.api.prai_api.prai_ask", {
+		message,
+		session_id: sessionId || "",
+	});
+}
+
+export function getPraiChatSession(sessionId: string) {
+	return callMethod<{ success: boolean; session: PraiChatSession }>(
+		"printechs_support.printechs_support_system.api.prai_api.get_prai_chat_session",
+		{ session_id: sessionId },
+	);
+}
+
+export function listPraiChatSessions(limit = 20) {
+	return callMethod<{ success: boolean; sessions: PraiChatSession[] }>(
+		"printechs_support.printechs_support_system.api.prai_api.list_prai_chat_sessions",
+		{ limit },
+	);
+}
+
+export function escalatePraiToTicket(sessionId: string, args?: { subject?: string; description?: string; priority?: string; customer?: string; ticket_type?: string }) {
+	return callMethod<{ success: boolean; ticket_id: string; session: PraiChatSession; already_linked?: boolean }>(
+		"printechs_support.printechs_support_system.api.prai_api.escalate_prai_to_ticket",
+		{
+			session_id: sessionId,
+			subject: args?.subject || "",
+			description: args?.description || "",
+			priority: args?.priority || "Medium",
+			customer: args?.customer || "",
+			ticket_type: args?.ticket_type || "",
+		},
 	);
 }
 

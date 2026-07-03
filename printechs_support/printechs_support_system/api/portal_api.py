@@ -245,6 +245,22 @@ def _portal_help_url() -> str:
 	return f"/{url}"
 
 
+def _portal_prai_enabled() -> bool:
+	from printechs_support.printechs_support_system.doctype.printechs_support_settings.printechs_support_settings import (
+		is_prai_mvp_enabled,
+	)
+
+	return is_prai_mvp_enabled()
+
+
+def _portal_prai_openai_enabled() -> bool:
+	from printechs_support.printechs_support_system.doctype.printechs_support_settings.printechs_support_settings import (
+		is_prai_openai_enabled,
+	)
+
+	return is_prai_openai_enabled()
+
+
 def _portal_brand_context() -> dict[str, str]:
 	logo = ""
 	try:
@@ -281,6 +297,8 @@ def get_portal_bootstrap():
 		"customers": customers,
 		"internal": internal,
 		"help_url": _portal_help_url(),
+		"prai_enabled": _portal_prai_enabled(),
+		"prai_openai_enabled": _portal_prai_openai_enabled(),
 		"brand_logo": brand["brand_logo"],
 		"brand_name": brand["brand_name"],
 	}
@@ -737,6 +755,57 @@ _PORTAL_TASK_LIST_FIELDS = [
 	"delay_days",
 	"creation",
 ]
+
+# Task list sort modes for portal API (see _sort_portal_task_rows).
+_VALID_PORTAL_TASK_SORT = frozenset({"task", "ticket", "due_date", "last_update"})
+
+
+def _normalize_portal_task_sort(sort_by: str | None = None) -> str:
+	sort = (sort_by or "task").strip().lower()
+	if sort not in _VALID_PORTAL_TASK_SORT:
+		return "task"
+	return sort
+
+
+def _sort_portal_task_rows(tasks: list, sort_by: str | None = None) -> None:
+	"""Sort task rows in place. Uses Python to avoid Frappe order_by SQL restrictions."""
+	sort = _normalize_portal_task_sort(sort_by)
+	if sort == "last_update":
+		tasks.sort(
+			key=lambda r: (str(r.get("modified") or ""), str(r.get("name") or "")),
+			reverse=True,
+		)
+		return
+	if sort == "due_date":
+		tasks.sort(
+			key=lambda r: (
+				0 if r.get("due_date") else 1,
+				str(r.get("due_date") or ""),
+				str(r.get("name") or ""),
+			)
+		)
+		return
+	if sort == "ticket":
+		tasks.sort(
+			key=lambda r: (str(r.get("support_ticket") or "\uffff"), str(r.get("name") or ""))
+		)
+		return
+	# task (default): by task ID / number ascending.
+	tasks.sort(key=lambda r: str(r.get("name") or ""))
+
+
+def _fetch_portal_tasks(filters: dict | None, limit: int, sort_by: str | None = None) -> list:
+	"""Load Support Task rows for portal lists with safe SQL order + Python sort."""
+	tasks = frappe.get_all(
+		"Support Task",
+		filters=filters or None,
+		fields=_PORTAL_TASK_LIST_FIELDS,
+		order_by="name asc",
+		limit_page_length=limit,
+	)
+	_sort_portal_task_rows(tasks, sort_by)
+	_wire_portal_task_rows(tasks)
+	return tasks
 
 # Task list sort modes for portal API (see _sort_portal_task_rows).
 _VALID_PORTAL_TASK_SORT = frozenset({"task", "ticket", "due_date", "last_update"})

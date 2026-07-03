@@ -1,0 +1,161 @@
+{
+ "actions": [],
+ "autoname": "field:faq_code",
+ "creation": "2026-07-03 00:00:00.000000",
+ "doctype": "DocType",
+ "document_type": "Document",
+ "engine": "InnoDB",
+ "field_order": [
+  "section_main",
+  "title",
+  "faq_code",
+  "category",
+  "module_area",
+  "column_break_main",
+  "keywords",
+  "is_active",
+  "sort_order",
+  "section_content",
+  "question",
+  "answer"
+ ],
+ "fields": [
+  {
+   "fieldname": "section_main",
+   "fieldtype": "Section Break",
+   "label": "FAQ"
+  },
+  {
+   "fieldname": "title",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Title",
+   "reqd": 1
+  },
+  {
+   "fieldname": "faq_code",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "FAQ Code",
+   "read_only": 1,
+   "unique": 1
+  },
+  {
+   "default": "General",
+   "fieldname": "category",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Category",
+   "options": "Modern POS\nERPNext\nPromotions\nStock\nLoyalty\nE-Wallet\nTroubleshooting\nGeneral"
+  },
+  {
+   "default": "General",
+   "fieldname": "module_area",
+   "fieldtype": "Select",
+   "in_standard_filter": 1,
+   "label": "Module Area",
+   "options": "Modern POS\nSupport\nWMS\nERPNext\nSales\nPurchase\nStock\nAccounts\nHR\nGeneral"
+  },
+  {
+   "fieldname": "column_break_main",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "keywords",
+   "fieldtype": "Small Text",
+   "label": "Keywords"
+  },
+  {
+   "default": "1",
+   "fieldname": "is_active",
+   "fieldtype": "Check",
+   "in_standard_filter": 1,
+   "label": "Is Active"
+  },
+  {
+   "default": "0",
+   "fieldname": "sort_order",
+   "fieldtype": "Int",
+   "label": "Sort Order"
+  },
+  {
+   "fieldname": "section_content",
+   "fieldtype": "Section Break",
+   "label": "Content"
+  },
+  {
+   "description": "Optional longer phrasing of the question (used for matching).",
+   "fieldname": "question",
+   "fieldtype": "Small Text",
+   "label": "Question"
+  },
+  {
+   "fieldname": "answer",
+   "fieldtype": "Text Editor",
+   "label": "Answer",
+   "reqd": 1
+  }
+ ],
+ "links": [],
+ "modified": "2026-07-03 00:00:00.000000",
+ "module": "Printechs Support System",
+ "name": "PRAI FAQ",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Printechs Support Coordinator",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 0,
+   "delete": 0,
+   "email": 0,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Printechs Support Engineer",
+   "share": 0,
+   "write": 0
+  },
+  {
+   "create": 0,
+   "delete": 0,
+   "email": 0,
+   "export": 0,
+   "print": 0,
+   "read": 1,
+   "report": 0,
+   "role": "Printechs Support Customer",
+   "share": 0,
+   "write": 0
+  }
+ ],
+ "search_fields": "title,faq_code,keywords,question",
+ "sort_field": "sort_order",
+ "sort_order": "ASC",
+ "title_field": "title",
+ "track_changes": 1
+}
