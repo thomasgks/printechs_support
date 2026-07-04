@@ -156,7 +156,7 @@ _TERM_GROUPS: tuple[frozenset[str], ...] = (
 	frozenset({"attachment", "upload", "file", "screenshot", "document"}),
 	frozenset({"login", "signin", "password", "authentication"}),
 	frozenset({"customer", "lookup", "search"}),
-	frozenset({"payment", "payments", "mode", "modes", "type", "types", "mop", "tender", "cash", "card", "checkout"}),
+	frozenset({"payment", "payments", "mop", "tender", "cash", "card", "wallet", "checkout"}),
 	frozenset({"report", "sales", "analytics", "register"}),
 	frozenset({"item", "product", "sku"}),
 	frozenset({"profile", "posprofile"}),
@@ -230,6 +230,10 @@ def _score_faq(row, terms: list[str]) -> int:
 		missing = [term for term in distinctive if not _term_matches(term, hay, hay_compact)]
 		if missing:
 			return 0
+	if _has_promotion_topic(" ".join(meaningful)) and not _faq_row_has_promotion_topic(row):
+		return 0
+	if _has_payment_topic(" ".join(meaningful)) and not _faq_row_has_payment_topic(row):
+		return 0
 	if len(meaningful) >= 2 and len(matched) < 2:
 		return 0
 	if len(meaningful) >= 3 and (len(matched) / len(meaningful)) < 0.34:
@@ -251,9 +255,13 @@ _ITEM_INTENT_TERMS = frozenset(
 	{"item", "items", "product", "products", "sku", "barcode", "stock", "inventory", "custom_is_pos"}
 )
 _ITEM_ACTION_TERMS = frozenset({"push", "upload"})
-_PAYMENT_INTENT_TERMS = frozenset(
-	{"payment", "payments", "mode", "modes", "type", "types", "mop", "tender", "cash", "card", "wallet"}
+_PROMOTION_INTENT_TERMS = frozenset(
+	{"promotion", "promotions", "discount", "discounts", "offer", "offers", "campaign", "campaigns", "deal", "deals"}
 )
+_PAYMENT_STRONG_TERMS = frozenset(
+	{"payment", "payments", "mop", "tender", "cash", "card", "wallet", "checkout"}
+)
+_PAYMENT_INTENT_TERMS = _PAYMENT_STRONG_TERMS | frozenset({"mode", "modes", "type", "types"})
 _BLOCK_ITEM_INTENT_TERMS = frozenset(
 	{
 		"payment",
@@ -280,20 +288,83 @@ _BLOCK_ITEM_INTENT_TERMS = frozenset(
 	}
 )
 
+def _has_promotion_topic(message: str) -> bool:
+	terms = set(_tokenize(message))
+	return bool(_PROMOTION_INTENT_TERMS & terms)
+
+
+def _has_payment_topic(message: str) -> bool:
+	terms = set(_tokenize(message))
+	compact = _compact(message)
+	if _PROMOTION_INTENT_TERMS & terms:
+		return False
+	if "paymenttype" in compact or "modeofpayment" in compact:
+		return True
+	if _PAYMENT_STRONG_TERMS & terms:
+		return True
+	if "payment" in terms and ({"type", "types", "mode", "modes"} & terms):
+		return True
+	return False
+
+
+def _faq_row_has_promotion_topic(row) -> bool:
+	hay = " ".join(str(x or "") for x in (row.title, row.question, row.keywords, row.category, row.module_area)).lower()
+	return any(term in hay for term in _PROMOTION_INTENT_TERMS)
+
+
+def _faq_row_has_payment_topic(row) -> bool:
+	hay = " ".join(str(x or "") for x in (row.title, row.question, row.keywords, row.category, row.module_area)).lower()
+	compact = _compact(hay)
+	if "paymenttype" in compact or "modeofpayment" in compact:
+		return True
+	return bool(_PAYMENT_STRONG_TERMS & set(_tokenize(hay)) or "payment type" in hay or "payment mode" in hay)
+
+
 _FAQ_INTENT_ROUTES: tuple[tuple[str, callable], ...] = (
+	("Promotion not applying at checkout", lambda message: _is_promotion_issue_query(message)),
+	("How do I set up a promotion in Modern POS?", lambda message: _is_promotion_setup_query(message)),
 	("How to add a payment type in Modern POS", lambda message: _is_payment_type_modern_pos_query(message)),
 	("How to push a new item to Modern POS", lambda message: _is_push_item_to_modern_pos_query(message)),
 	("How to set up Modern POS step by step", lambda message: _is_modern_pos_setup_query(message)),
 )
 
 
+def _is_promotion_issue_query(message: str) -> bool:
+	terms = set(_tokenize(message))
+	if not (_PROMOTION_INTENT_TERMS & terms):
+		return False
+	return bool(
+		{"not", "missing", "apply", "applying", "issue", "problem", "wrong", "fail", "failing", "checkout", "work", "working"}
+		& terms
+	)
+
+
+def _is_promotion_setup_query(message: str) -> bool:
+	terms = set(_tokenize(message))
+	if not (_PROMOTION_INTENT_TERMS & terms):
+		return False
+	if _is_promotion_issue_query(message):
+		return False
+	has_modern_pos = "modernpos" in _compact(message) or ("modern" in terms and "pos" in terms)
+	has_action = bool({"setup", "configure", "configuration", "create", "add", "new", "set"} & terms)
+	return bool(has_modern_pos or has_action or "how" in terms)
+
+
 def _is_payment_type_modern_pos_query(message: str) -> bool:
 	terms = set(_tokenize(message))
 	compact = _compact(message)
+	if _PROMOTION_INTENT_TERMS & terms:
+		return False
 	has_modern_pos = "modernpos" in compact or ("modern" in terms and "pos" in terms)
-	has_payment = bool(_PAYMENT_INTENT_TERMS & terms) or "modeofpayment" in compact or "paymenttype" in compact
+	if not has_modern_pos or not _has_payment_topic(message):
+		return False
 	has_add_intent = bool({"add", "create", "new", "setup", "configure"} & terms)
-	return bool(has_modern_pos and has_payment and (has_add_intent or "type" in terms or "mode" in terms))
+	return bool(
+		has_add_intent
+		or "paymenttype" in compact
+		or "modeofpayment" in compact
+		or ("payment" in terms and ({"type", "types", "mode", "modes"} & terms))
+	)
 
 
 def _is_push_item_to_modern_pos_query(message: str) -> bool:
@@ -317,9 +388,11 @@ def _is_modern_pos_setup_query(message: str) -> bool:
 	compact = _compact(message)
 	if _ITEM_INTENT_TERMS & terms and not ({"setup", "install", "configure", "configuration"} & terms):
 		return False
-	if _PAYMENT_INTENT_TERMS & terms:
+	if _has_payment_topic(message):
 		return False
-	if {"promotion", "discount", "offer", "campaign", "loyalty", "barcode", "scanner"} & terms:
+	if _PROMOTION_INTENT_TERMS & terms:
+		return False
+	if {"loyalty", "barcode", "scanner"} & terms:
 		return False
 	has_modern_pos = "modernpos" in compact or ("modern" in terms and "pos" in terms)
 	setup_words = {"setup", "configure", "configuration", "install", "deploy", "implementation"}

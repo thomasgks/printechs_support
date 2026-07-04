@@ -121,6 +121,39 @@ class TestPraiApi(FrappeTestCase):
 		self.assertIn("payment", match[0][1].title.lower())
 		self.assertNotIn("push a new item", match[0][1].title.lower())
 
+	def test_promotion_questions_do_not_match_payment_faq(self):
+		from printechs_support.printechs_support_system.api import prai_api
+
+		questions = [
+			"how do i set up a promotion in modern pos",
+			"how to setup promotion in modern pos",
+			"how to create promotion type in modern pos",
+			"how to add promotion in modern pos",
+		]
+		for question in questions:
+			with self.subTest(question=question):
+				match = prai_api._match_faq(question)
+				self.assertTrue(match, msg=f"No FAQ match for: {question}")
+				title = (match[0][1].title or "").lower()
+				self.assertNotIn("payment type", title)
+				self.assertNotIn("add a payment", title)
+
+	def test_promotion_setup_question_matches_promotion_faq(self):
+		from printechs_support.printechs_support_system.api import prai_api
+
+		result = prai_api.prai_ask("how do i set up a promotion in modern pos")
+		content = ((result.get("message") or {}).get("content") or "").lower()
+		self.assertIn("promotion", content)
+		self.assertNotIn("mode of payment", content)
+
+	def test_promotion_issue_question_matches_promotion_faq(self):
+		from printechs_support.printechs_support_system.api import prai_api
+
+		result = prai_api.prai_ask("promotion not applying at checkout on modern pos")
+		content = ((result.get("message") or {}).get("content") or "").lower()
+		self.assertIn("promotion", content)
+		self.assertNotIn("mode of payment", content)
+
 	def test_general_product_question_skips_faq(self):
 		from printechs_support.printechs_support_system.api import prai_api
 
