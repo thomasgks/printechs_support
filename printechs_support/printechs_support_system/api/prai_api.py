@@ -727,19 +727,25 @@ def _build_fallback_reply() -> tuple[str, str, list[dict], bool]:
 
 def _try_build_promotion_assistant_reply(message: str):
 	"""Live promotion catalog / configuration guide from ERPNext POS Promotion."""
-	if not (_is_promotion_list_query(message) or _is_promotion_guide_query(message)):
-		return None
 	from printechs_support.printechs_support_system.prai_promotion_assistant import (
 		build_promotion_assistant_reply,
+		try_build_specific_promotion_reply,
 	)
 
-	include_catalog = _is_promotion_list_query(message)
-	include_guide = _is_promotion_guide_query(message) or include_catalog
-	result = build_promotion_assistant_reply(
-		message,
-		include_catalog=include_catalog,
-		include_guide=include_guide,
-	)
+	specific = try_build_specific_promotion_reply(message)
+	if specific:
+		result = specific
+	elif _is_promotion_list_query(message) or _is_promotion_guide_query(message):
+		include_catalog = _is_promotion_list_query(message)
+		include_guide = _is_promotion_guide_query(message) or include_catalog
+		result = build_promotion_assistant_reply(
+			message,
+			include_catalog=include_catalog,
+			include_guide=include_guide,
+		)
+	else:
+		return None
+
 	if not result:
 		return None
 	content, source_type, reference, sources, suggest = result

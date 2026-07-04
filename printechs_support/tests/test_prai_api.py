@@ -165,6 +165,18 @@ class TestPraiApi(FrappeTestCase):
 		self.assertIn("configuration guide", content)
 		self.assertIn("benefit", content)
 
+	def test_specific_promotion_configure_question(self):
+		from printechs_support.printechs_support_system.api import prai_api
+
+		result = prai_api.prai_ask("how to configure Bundle Any 3 for 29.99 (SAMPLE_BUNDLE_PRICE)")
+		message = result.get("message") or {}
+		content = (message.get("content") or "").lower()
+		self.assertEqual(message.get("source_type"), "Live Data")
+		self.assertFalse(result.get("suggest_escalation"))
+		self.assertIn("sample_bundle_price", content)
+		self.assertIn("bundle price", content)
+		self.assertIn("not on pos", content)
+
 	def test_promotion_issue_question_matches_promotion_faq(self):
 		from printechs_support.printechs_support_system.api import prai_api
 

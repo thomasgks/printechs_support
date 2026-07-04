@@ -5,9 +5,12 @@
 
 from __future__ import annotations
 
+import json
+import re
+
 import frappe
 from frappe import _
-from frappe.utils import cint, format_datetime, get_datetime, now_datetime
+from frappe.utils import cint, format_datetime, get_datetime, now_datetime, strip_html
 
 POS_SYNC_STATUSES = frozenset({"Active", "Approved"})
 
@@ -40,6 +43,188 @@ def promotion_doctype_available() -> bool:
 
 def can_read_promotions() -> bool:
 	return promotion_doctype_available() and bool(frappe.has_permission("POS Promotion", "read"))
+
+
+_CONFIGURE_INTENT_TERMS = frozenset(
+	{"configure", "configuration", "setup", "set", "edit", "activate", "enable", "how", "change", "update"}
+)
+
+
+def _tokenize(text: str) -> list[str]:
+	return [part for part in re.split(r"[^\w]+", (text or "").lower()) if len(part) >= 2]
+
+
+def _has_configure_intent(message: str) -> bool:
+	return bool(_CONFIGURE_INTENT_TERMS & set(_tokenize(message)))
+
+
+def find_promotion_from_message(message: str):
+	"""Resolve a POS Promotion doc from a user message (code in brackets, code token, or name)."""
+	if not can_read_promotions():
+		return None
+
+	text = (message or "").strip()
+	if not text:
+		return None
+
+	paren = re.search(r"\(([A-Z0-9_]+)\)", text)
+	if paren:
+		code = paren.group(1)
+		name = frappe.db.get_value("POS Promotion", {"promotion_code": code}, "name")
+		if not name:
+			name = frappe.db.exists("POS Promotion", code)
+		if name:
+			return frappe.get_doc("POS Promotion", name)
+
+	compact = re.sub(r"[\W_]+", "", text.upper())
+	for row in fetch_all_pos_promotions(limit=100) or []:
+		code = (row.get("promotion_code") or "").strip().upper()
+		if code and code in compact:
+			return frappe.get_doc("POS Promotion", row.name)
+
+	lower = text.lower()
+	best_name = ""
+	best_doc = None
+	for row in fetch_all_pos_promotions(limit=100) or []:
+		promo_name = (row.get("promotion_name") or "").strip()
+		if len(promo_name) >= 6 and promo_name.lower() in lower:
+			if len(promo_name) > len(best_name):
+				best_name = promo_name
+				best_doc = row.name
+	if best_doc:
+		return frappe.get_doc("POS Promotion", best_doc)
+	return None
+
+
+def _doc_as_availability_row(doc) -> dict:
+	return {
+		"name": doc.name,
+		"promotion_code": doc.promotion_code,
+		"promotion_name": doc.promotion_name,
+		"status": doc.status,
+		"is_active": doc.is_active,
+		"start_datetime": doc.start_datetime,
+		"end_datetime": doc.end_datetime,
+		"promotion_scope": doc.promotion_scope,
+		"store_codes": doc.get("store_codes"),
+		"warehouse_codes": doc.get("warehouse_codes"),
+		"pos_profile_codes": doc.get("pos_profile_codes"),
+		"max_total_usage": doc.get("max_total_usage"),
+		"current_usage_count": doc.get("current_usage_count"),
+	}
+
+
+def _format_condition_line(row) -> str:
+	condition_type = (row.condition_type or "").replace("_", " ").title()
+	operator = row.operator or ""
+	value_text = (row.value_text or "").strip()
+	value_number = row.value_number
+	parts = [condition_type]
+	if operator:
+		parts.append(operator)
+	if value_number not in (None, ""):
+		parts.append(str(value_number))
+	if value_text:
+		parts.append(value_text)
+	return " ".join(parts)
+
+
+def _format_benefit_line(row) -> str:
+	benefit_type = row.benefit_type or ""
+	label = BENEFIT_LABELS.get(benefit_type, benefit_type.replace("_", " ").title())
+	chunks = [label]
+	if row.bundle_price:
+		chunks.append(_("bundle price {0}").format(row.bundle_price))
+	if row.value_number not in (None, "", 0.0) and "PERCENT" in benefit_type:
+		chunks.append(f"{row.value_number}%")
+	elif row.value_number not in (None, "", 0.0):
+		chunks.append(str(row.value_number))
+	if row.bundle_code:
+		chunks.append(_("bundle {0}").format(row.bundle_code))
+	if row.free_item_code:
+		chunks.append(_("free item {0}").format(row.free_item_code))
+	if row.value_text:
+		try:
+			payload = json.loads(row.value_text)
+			if isinstance(payload, dict):
+				if payload.get("RequiredQty"):
+					chunks.append(_("qty {0}").format(payload.get("RequiredQty")))
+				if payload.get("RequiredCategories"):
+					chunks.append(_("categories {0}").format(", ".join(payload.get("RequiredCategories") or [])))
+		except Exception:
+			pass
+	return " — ".join(chunks)
+
+
+def format_single_promotion_guide(doc) -> str:
+	row = _doc_as_availability_row(doc)
+	available, reasons = evaluate_promotion_pos_availability(row)
+	code = (doc.promotion_code or doc.name or "").strip()
+	name = (doc.promotion_name or code).strip()
+	lines = [_("Configure promotion: {0} ({1})").format(name, code), ""]
+
+	lines.extend([_("Current status"), ""])
+	status = doc.status or _("Unknown")
+	active = _("Yes") if cint(doc.is_active) else _("No")
+	lines.append(f"• {_('Status')}: {status} | {_('Is Active')}: {active}")
+	if available:
+		lines.append(f"• {_('Available on Modern POS now')}")
+	else:
+		lines.append(f"• {_('Not on POS yet')}: {'; '.join(reasons)}")
+	lines.append("")
+
+	lines.extend([_("Promotion settings"), ""])
+	start = format_datetime(doc.start_datetime) if doc.start_datetime else "—"
+	end = format_datetime(doc.end_datetime) if doc.end_datetime else "—"
+	lines.append(f"1. {_('Scope')} — {_scope_label(doc.promotion_scope)}")
+	lines.append(f"2. {_('Valid period')} — {start} {_('to')} {end}")
+	if doc.description:
+		lines.append(f"3. {_('Description')} — {strip_html(doc.description)}")
+	step = 4
+	for cond in doc.conditions or []:
+		lines.append(f"{step}. {_('Condition')} — {_format_condition_line(cond)}")
+		step += 1
+	for benefit in doc.benefits or []:
+		lines.append(f"{step}. {_('Benefit')} — {_format_benefit_line(benefit)}")
+		step += 1
+	if doc.time_slots:
+		lines.append(f"{step}. {_('Time slots')} — {len(doc.time_slots)} {_('configured')}")
+		step += 1
+	if doc.tiers:
+		lines.append(f"{step}. {_('Tiers')} — {len(doc.tiers)} {_('configured')}")
+		step += 1
+
+	lines.extend(["", _("Steps to enable on Modern POS"), ""])
+	lines.append(f"1. {_('Open')} POS Promotion → {code} {_('in ERPNext')}.")
+	lines.append(f"2. {_('Set Is Active = Yes and Status = Active or Approved')}.")
+	lines.append(f"3. {_('Review conditions and benefits above, then Save')}.")
+	lines.append(f"4. {_('Run Sync on the Modern POS terminal')}.")
+	lines.append(f"5. {_('Test at checkout with qualifying items')}.")
+	if doc.benefits and (doc.benefits[0].benefit_type or "") == "BUNDLE_PRICE":
+		lines.append(
+			f"6. {_('For bundle promotions, add the required quantity of eligible items before the bundle price applies')}."
+		)
+	return "\n".join(lines)
+
+
+def try_build_specific_promotion_reply(message: str):
+	"""Configure/help for one promotion identified in the user message."""
+	if not _has_configure_intent(message):
+		return None
+	doc = find_promotion_from_message(message)
+	if not doc:
+		return None
+	content = format_single_promotion_guide(doc)
+	sources = [
+		{
+			"type": "erpnext",
+			"name": doc.name,
+			"title": doc.promotion_name or doc.promotion_code,
+			"summary": _("Promotion configuration from ERPNext"),
+			"url": f"/app/pos-promotion/{doc.name}",
+		}
+	]
+	return content, "Live Data", doc.name, sources, False
 
 
 def evaluate_promotion_pos_availability(row: dict) -> tuple[bool, list[str]]:
