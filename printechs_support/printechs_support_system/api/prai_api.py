@@ -320,13 +320,44 @@ def _faq_row_has_payment_topic(row) -> bool:
 	return bool(_PAYMENT_STRONG_TERMS & set(_tokenize(hay)) or "payment type" in hay or "payment mode" in hay)
 
 
+_PROMOTION_LIST_TERMS = frozenset(
+	{
+		"list",
+		"lists",
+		"available",
+		"show",
+		"view",
+		"see",
+		"display",
+		"which",
+		"active",
+		"all",
+		"have",
+	}
+)
+
 _FAQ_INTENT_ROUTES: tuple[tuple[str, callable], ...] = (
+	("How to view list of promotions in Modern POS", lambda message: _is_promotion_list_query(message)),
 	("Promotion not applying at checkout", lambda message: _is_promotion_issue_query(message)),
 	("How do I set up a promotion in Modern POS?", lambda message: _is_promotion_setup_query(message)),
 	("How to add a payment type in Modern POS", lambda message: _is_payment_type_modern_pos_query(message)),
 	("How to push a new item to Modern POS", lambda message: _is_push_item_to_modern_pos_query(message)),
 	("How to set up Modern POS step by step", lambda message: _is_modern_pos_setup_query(message)),
 )
+
+
+def _is_promotion_list_query(message: str) -> bool:
+	terms = set(_tokenize(message))
+	if not (_PROMOTION_INTENT_TERMS & terms):
+		return False
+	if _is_promotion_issue_query(message):
+		return False
+	compact = _compact(message)
+	if "listof" in compact or "availablepromotion" in compact or "promotionlist" in compact:
+		return True
+	if _PROMOTION_LIST_TERMS & terms:
+		return True
+	return bool("what" in terms and ({"available", "active", "list", "have", "show"} & terms))
 
 
 def _is_promotion_issue_query(message: str) -> bool:
@@ -343,11 +374,11 @@ def _is_promotion_setup_query(message: str) -> bool:
 	terms = set(_tokenize(message))
 	if not (_PROMOTION_INTENT_TERMS & terms):
 		return False
-	if _is_promotion_issue_query(message):
+	if _is_promotion_issue_query(message) or _is_promotion_list_query(message):
 		return False
 	has_modern_pos = "modernpos" in _compact(message) or ("modern" in terms and "pos" in terms)
 	has_action = bool({"setup", "configure", "configuration", "create", "add", "new", "set"} & terms)
-	return bool(has_modern_pos or has_action or "how" in terms)
+	return bool(has_action or ("how" in terms and has_modern_pos))
 
 
 def _is_payment_type_modern_pos_query(message: str) -> bool:

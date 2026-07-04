@@ -1,0 +1,122 @@
+[
+  {
+    "title": "What promotions are active today in Modern POS?",
+    "question": "Which promotions are active today on my store POS?",
+    "keywords": "active promotions, today, current promotions, available promotions, promotion list, modern pos",
+    "category": "Promotions",
+    "module_area": "Modern POS",
+    "answer": "<p>Open <strong>POS Promotion</strong> in ERPNext and filter by <strong>Active</strong> with today's date within start/end dates. After confirming, run <strong>Sync</strong> on Modern POS so the terminal receives current promotions.</p><p>At checkout, qualifying promotions apply automatically when item, customer, and store rules match.</p>"
+  },
+  {
+    "title": "How to check if a promotion is synced to Modern POS",
+    "question": "How do I know promotions downloaded to the POS terminal?",
+    "keywords": "sync promotion, download promotion, promotion synced, modern pos sync, master data",
+    "category": "Promotions",
+    "module_area": "Modern POS",
+    "answer": "<p>Run <strong>Sync</strong> on Modern POS after saving promotions in ERPNext. Test with a qualifying item at checkout. If discount does not apply, verify promotion scope (store/warehouse), dates, and item conditions, then sync again.</p>"
+  },
+  {
+    "title": "How to create POS Promotion in ERPNext",
+    "question": "Where do I create a new POS Promotion master?",
+    "keywords": "create promotion, pos promotion, new promotion, erpnext, promotion master, modern pos",
+    "category": "Promotions",
+    "module_area": "ERPNext",
+    "answer": "<p>In ERPNext, open <strong>POS Promotion</strong> and create a new record. Set promotion code, name, discount rules, eligible items or groups, store/warehouse scope, and valid dates. Submit/activate per your workflow, then sync Modern POS.</p>"
+  },
+  {
+    "title": "How to assign promotion to a specific store",
+    "question": "Promotion should apply to one store only",
+    "keywords": "store promotion, warehouse promotion, store specific, promotion scope, modern pos",
+    "category": "Promotions",
+    "module_area": "Modern POS",
+    "answer": "<p>Set promotion scope to the store warehouse or POS Profile for that branch in <strong>POS Promotion</strong>. Save and sync Modern POS on terminals linked to that store only.</p>"
+  },
+  {
+    "title": "How to list items available on Modern POS",
+    "question": "Can I see all items loaded on the POS terminal?",
+    "keywords": "list items, item list, available items, pos items, modern pos, sync items",
+    "category": "Stock",
+    "module_area": "Modern POS",
+    "answer": "<p>Items on POS come from ERPNext items flagged for POS with prices in the store price list. Search items on the terminal after sync, or review Item list / Item Price in ERPNext filtered by POS Profile price list and warehouse stock.</p>"
+  },
+  {
+    "title": "How to list payment modes on Modern POS",
+    "question": "What payment types are available on my POS?",
+    "keywords": "list payment modes, payment types available, payment methods, checkout, modern pos, pos profile",
+    "category": "Modern POS",
+    "module_area": "Modern POS",
+    "answer": "<p>Allowed payment modes come from <strong>POS Profile</strong> in ERPNext. Open the profile linked to your store, review Payment Methods, save, and sync Modern POS. Cashiers see enabled modes at checkout after sync.</p>"
+  },
+  {
+    "title": "How to find POS Profile for my store",
+    "question": "Which POS Profile is linked to my Modern POS store?",
+    "keywords": "pos profile, store profile, modern pos profile, link store, configuration",
+    "category": "Modern POS",
+    "module_area": "Modern POS",
+    "answer": "<p>Check the store profile settings on Modern POS terminal or the store/warehouse mapping in ERPNext Modern POS setup. The linked <strong>POS Profile</strong> controls warehouse, price list, users, and payment modes for that store.</p>"
+  },
+  {
+    "title": "How to reprint last receipt on Modern POS",
+    "question": "Cashier needs to reprint previous invoice receipt",
+    "keywords": "reprint receipt, last invoice, duplicate receipt, print again, modern pos",
+    "category": "Modern POS",
+    "module_area": "Modern POS",
+    "answer": "<p>Use the reprint or invoice history function on Modern POS (if enabled for the role). Locate the recent invoice and print again. If unavailable, retrieve the POS Invoice in ERPNext and print from there.</p>"
+  },
+  {
+    "title": "How to hold and recall a bill on POS",
+    "question": "Can I park a sale and continue later?",
+    "keywords": "hold bill, recall bill, park sale, suspend sale, modern pos",
+    "category": "Modern POS",
+    "module_area": "Modern POS",
+    "answer": "<p>If your Modern POS version supports hold/recall, use Hold during billing and Recall from the held bills list. Options depend on store profile settings and cashier permissions.</p>"
+  },
+  {
+    "title": "How to change item price on POS",
+    "question": "Can cashier change price at checkout?",
+    "keywords": "change price, price override, edit rate, pos price, manager approval",
+    "category": "Modern POS",
+    "module_area": "Modern POS",
+    "answer": "<p>Price overrides depend on role permissions in Modern POS and ERPNext. Some sites require manager PIN. Standard prices come from Item Price linked to the POS Profile price list after sync.</p>"
+  },
+  {
+    "title": "How to search item by name on Modern POS",
+    "question": "Find product without barcode scan",
+    "keywords": "search item, find product, item name search, lookup item, modern pos",
+    "category": "Modern POS",
+    "module_area": "Modern POS",
+    "answer": "<p>Use item search on the POS billing screen. Enter item name, code, or partial barcode. If item is missing, confirm it is POS-enabled, priced, in stock, and synced to the terminal.</p>"
+  },
+  {
+    "title": "How to identify customer for loyalty on POS",
+    "question": "How to link customer before billing for loyalty points?",
+    "keywords": "identify customer, customer lookup, loyalty customer, mobile number, modern pos",
+    "category": "Loyalty",
+    "module_area": "Modern POS",
+    "answer": "<p>Search customer by mobile, name, or customer ID on the POS sale before adding items. Sync master data if the customer was created recently in ERPNext.</p>"
+  },
+  {
+    "title": "What is ERPNext?",
+    "question": "Explain ERPNext for retail users",
+    "keywords": "what is erpnext, erpnext overview, erp, retail erp, printechs",
+    "category": "General",
+    "module_area": "ERPNext",
+    "answer": "<p><strong>ERPNext</strong> is an open-source ERP used for accounting, inventory, sales, purchasing, and retail operations. Printechs Modern POS connects to ERPNext for items, prices, stock, promotions, customers, and posted POS sales.</p>"
+  },
+  {
+    "title": "What is Modern POS?",
+    "question": "Explain Modern POS for store staff",
+    "keywords": "what is modern pos, modern pos overview, pos terminal, printechs pos",
+    "category": "General",
+    "module_area": "Modern POS",
+    "answer": "<p><strong>Modern POS</strong> is Printechs point-of-sale software for checkout, shifts, promotions, loyalty, and offline sales. It syncs master data and uploads sales to ERPNext.</p>"
+  },
+  {
+    "title": "How to contact Printechs support",
+    "question": "Need phone or email for Printechs support",
+    "keywords": "contact support, printechs support, help desk, phone, email, support portal",
+    "category": "General",
+    "module_area": "Support",
+    "answer": "<p>Use the Printechs Support Portal to create a ticket with subject, details, and screenshots. You can also escalate from PRAI chat. Response times depend on your support agreement.</p>"
+  }
+]

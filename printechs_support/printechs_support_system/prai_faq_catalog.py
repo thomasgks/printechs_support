@@ -193,6 +193,27 @@ PRAI_FAQ_CATALOG: list[dict] = [
 		),
 	},
 	{
+		"title": "How to view list of promotions in Modern POS",
+		"question": "Can I have a list of promotions available in Modern POS?",
+		"keywords": "list promotions, list of promotions, available promotions, view promotions, show promotions, see promotions, active promotions, promotion list, which promotions, what promotions, modern pos, erpnext, pos promotion",
+		"category": "Promotions",
+		"module_area": "Modern POS",
+		"sort_order": 29,
+		"answer": (
+			"<p><strong>Where to see available promotions</strong></p>"
+			"<ol>"
+			"<li><strong>ERPNext master list</strong> — Open the <strong>POS Promotion</strong> list in ERPNext (Modern POS module). "
+			"Filter by <strong>Active</strong>, then review promotion name/code, start/end dates, and store or warehouse scope.</li>"
+			"<li><strong>Sync Modern POS</strong> — Run <strong>Sync</strong> on the terminal so active promotions for your store are downloaded.</li>"
+			"<li><strong>At checkout</strong> — Eligible promotions usually apply automatically when items, customer, dates, and store rules match. "
+			"Add qualifying items and confirm the discount on the line or bill total.</li>"
+			"<li><strong>On the terminal</strong> — If your Modern POS version includes a Promotions or Offers screen, open it after sync to review cached active promotions for the store.</li>"
+			"</ol>"
+			"<p>PRAI shows guidance only — it cannot display your live promotion list from ERPNext. "
+			"Use the POS Promotion list in ERPNext for the full active promotion report.</p>"
+		),
+	},
+	{
 		"title": "How do I set up a promotion in Modern POS?",
 		"question": "How to configure discount or offer for POS checkout?",
 		"keywords": "promotion, discount, offer, campaign, setup, configure, modern pos, erpnext",
@@ -470,3 +491,19 @@ def seed_prai_faqs(*, update_existing: bool = False) -> dict:
 		doc.insert(ignore_permissions=True)
 		created += 1
 	return {"created": created, "updated": updated, "skipped": skipped, "total": len(PRAI_FAQ_CATALOG)}
+
+
+def import_faq_pack(*, update_existing: bool = True) -> dict:
+	"""Import optional extra FAQs from prai_faq_import_pack.json (safe to run multiple times)."""
+	import json
+	from pathlib import Path
+
+	path = Path(__file__).with_name("prai_faq_import_pack.json")
+	if not path.exists():
+		return {"created": 0, "updated": 0, "skipped": 0, "total": 0, "error": "pack file not found"}
+	items = json.loads(path.read_text(encoding="utf-8"))
+	if not isinstance(items, list):
+		frappe.throw("Invalid FAQ import pack format.")
+	from printechs_support.printechs_support_system.prai_document_import import upsert_prai_faqs
+
+	return upsert_prai_faqs(items, update_existing=update_existing)

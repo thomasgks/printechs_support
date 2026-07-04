@@ -146,6 +146,15 @@ class TestPraiApi(FrappeTestCase):
 		self.assertIn("promotion", content)
 		self.assertNotIn("mode of payment", content)
 
+	def test_promotion_list_question_matches_list_faq(self):
+		from printechs_support.printechs_support_system.api import prai_api
+
+		result = prai_api.prai_ask("can i have list of promotions available in modern pos")
+		content = ((result.get("message") or {}).get("content") or "").lower()
+		self.assertIn("pos promotion", content)
+		self.assertIn("erpnext", content)
+		self.assertNotIn("create the promotion in erpnext (promotion master", content)
+
 	def test_promotion_issue_question_matches_promotion_faq(self):
 		from printechs_support.printechs_support_system.api import prai_api
 
