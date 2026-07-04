@@ -209,8 +209,8 @@ PRAI_FAQ_CATALOG: list[dict] = [
 			"Add qualifying items and confirm the discount on the line or bill total.</li>"
 			"<li><strong>On the terminal</strong> — If your Modern POS version includes a Promotions or Offers screen, open it after sync to review cached active promotions for the store.</li>"
 			"</ol>"
-			"<p>PRAI shows guidance only — it cannot display your live promotion list from ERPNext. "
-			"Use the POS Promotion list in ERPNext for the full active promotion report.</p>"
+			"<p>Ask PRAI this same question to see a live list of active promotions from ERPNext (when you have access). "
+			"Otherwise open the POS Promotion list in Desk for the full report.</p>"
 		),
 	},
 	{

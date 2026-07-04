@@ -31,7 +31,7 @@
    "fieldname": "source_type",
    "fieldtype": "Select",
    "label": "Source Type",
-   "options": "\nFAQ\nHelp Article\nOpenAI\nSystem\nEscalation"
+   "options": "\nFAQ\nHelp Article\nOpenAI\nLive Data\nSystem\nEscalation"
   },
   {
    "fieldname": "source_reference",
