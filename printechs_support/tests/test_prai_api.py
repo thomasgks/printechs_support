@@ -153,11 +153,17 @@ class TestPraiApi(FrappeTestCase):
 		message = result.get("message") or {}
 		content = (message.get("content") or "").lower()
 		self.assertIn(message.get("source_type"), ("Live Data", "FAQ"))
-		self.assertTrue(
-			"active promotion" in content or "where to see available promotions" in content,
-			msg=content,
-		)
+		self.assertIn("promotion catalog", content)
+		self.assertIn("not available on pos", content)
 		self.assertNotIn("create the promotion in erpnext (promotion master", content)
+
+	def test_promotion_guide_question_returns_configuration_guide(self):
+		from printechs_support.printechs_support_system.api import prai_api
+
+		result = prai_api.prai_ask("explain promotion types and how to configure promotions in modern pos")
+		content = ((result.get("message") or {}).get("content") or "").lower()
+		self.assertIn("configuration guide", content)
+		self.assertIn("benefit", content)
 
 	def test_promotion_issue_question_matches_promotion_faq(self):
 		from printechs_support.printechs_support_system.api import prai_api

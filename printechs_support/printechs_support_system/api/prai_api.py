@@ -9,7 +9,7 @@ from html import unescape
 
 import frappe
 from frappe import _
-from frappe.utils import cint, format_datetime, now_datetime, strip_html
+from frappe.utils import cint, strip_html
 
 from printechs_support.api.help_article import get_contextual_help
 from printechs_support.permissions import get_allowed_customers, user_can_access_support_portal, user_sees_all_support_records
@@ -360,6 +360,36 @@ def _is_promotion_list_query(message: str) -> bool:
 	return bool("what" in terms and ({"available", "active", "list", "have", "show"} & terms))
 
 
+def _is_promotion_guide_query(message: str) -> bool:
+	terms = set(_tokenize(message))
+	if not (_PROMOTION_INTENT_TERMS & terms):
+		return False
+	if _is_promotion_issue_query(message) or _is_promotion_list_query(message):
+		return False
+	guide_terms = {
+		"guide",
+		"configure",
+		"configuration",
+		"types",
+		"type",
+		"create",
+		"setup",
+		"set",
+		"step",
+		"complete",
+		"help",
+		"explain",
+		"benefit",
+		"benefits",
+		"condition",
+		"conditions",
+		"scope",
+		"stacking",
+		"rules",
+	}
+	return bool(guide_terms & terms or ("how" in terms and (_PROMOTION_INTENT_TERMS & terms)))
+
+
 def _is_promotion_issue_query(message: str) -> bool:
 	terms = set(_tokenize(message))
 	if not (_PROMOTION_INTENT_TERMS & terms):
@@ -374,7 +404,7 @@ def _is_promotion_setup_query(message: str) -> bool:
 	terms = set(_tokenize(message))
 	if not (_PROMOTION_INTENT_TERMS & terms):
 		return False
-	if _is_promotion_issue_query(message) or _is_promotion_list_query(message):
+	if _is_promotion_issue_query(message) or _is_promotion_list_query(message) or _is_promotion_guide_query(message):
 		return False
 	has_modern_pos = "modernpos" in _compact(message) or ("modern" in terms and "pos" in terms)
 	has_action = bool({"setup", "configure", "configuration", "create", "add", "new", "set"} & terms)
@@ -695,92 +725,46 @@ def _build_fallback_reply() -> tuple[str, str, list[dict], bool]:
 	return content, "System", [], True
 
 
-def _pos_promotion_doctype_available() -> bool:
-	return bool(frappe.db.table_exists("POS Promotion"))
-
-
-def _fetch_active_pos_promotions(*, limit: int = 25) -> list[dict] | None:
-	"""Return active POS Promotion rows, or None when Modern POS is unavailable or not permitted."""
-	if not _pos_promotion_doctype_available():
+def _try_build_promotion_assistant_reply(message: str):
+	"""Live promotion catalog / configuration guide from ERPNext POS Promotion."""
+	if not (_is_promotion_list_query(message) or _is_promotion_guide_query(message)):
 		return None
-	if not frappe.has_permission("POS Promotion", "read"):
+	from printechs_support.printechs_support_system.prai_promotion_assistant import (
+		build_promotion_assistant_reply,
+	)
+
+	include_catalog = _is_promotion_list_query(message)
+	include_guide = _is_promotion_guide_query(message) or include_catalog
+	result = build_promotion_assistant_reply(
+		message,
+		include_catalog=include_catalog,
+		include_guide=include_guide,
+	)
+	if not result:
 		return None
-	current = now_datetime()
-	return frappe.get_all(
-		"POS Promotion",
-		filters={
-			"is_active": 1,
-			"status": ["in", ["Active", "Approved"]],
-			"start_datetime": ["<=", current],
-			"end_datetime": [">=", current],
-		},
-		fields=[
-			"name",
-			"promotion_code",
-			"promotion_name",
-			"start_datetime",
-			"end_datetime",
-			"promotion_scope",
-			"description",
+	content, source_type, reference, sources, suggest = result
+	src = sources[0]
+	return (
+		content,
+		source_type,
+		reference,
+		[
+			_source_dict(
+				source_type=src.get("type") or "erpnext",
+				name=src.get("name") or "",
+				title=src.get("title") or "",
+				summary=src.get("summary") or "",
+				url=src.get("url") or "",
+			)
 		],
-		order_by="priority desc, promotion_name asc",
-		limit_page_length=limit,
+		suggest,
 	)
 
 
-def _format_promotion_scope(scope: str | None) -> str:
-	value = (scope or "GLOBAL").replace("_", " ").strip()
-	return value.title() if value else "Global"
-
-
-def _format_promotion_list_reply(promotions: list[dict]) -> str:
-	if not promotions:
-		return _(
-			"Active promotions in Modern POS\n\n"
-			"No active POS Promotion records were found for today.\n\n"
-			"1. ERPNext — Open POS Promotion, create or activate promotions, and set valid start/end dates.\n"
-			"2. Sync — Run Sync on Modern POS so the terminal downloads active promotions.\n"
-			"3. Verify — Test a qualifying item at checkout after sync."
-		)
-
-	lines = [_("Active promotions in ERPNext ({0} found)").format(len(promotions)), ""]
-	for index, row in enumerate(promotions, start=1):
-		code = (row.get("promotion_code") or row.get("name") or "").strip()
-		name = (row.get("promotion_name") or code or _("Untitled promotion")).strip()
-		end = row.get("end_datetime")
-		end_text = format_datetime(end) if end else "—"
-		scope = _format_promotion_scope(row.get("promotion_scope"))
-		label = f"{name} ({code})" if code and code != name else name
-		lines.append(f"{index}. {label} — Scope: {scope} | Valid until: {end_text}")
-
-	lines.extend(["", _("Run Sync on Modern POS to download these promotions to your terminal.")])
-	return "\n".join(lines)
-
-
-def _try_build_promotion_list_reply(message: str):
-	"""Return a live promotion list when the user asks to list/view available promotions."""
-	if not _is_promotion_list_query(message):
-		return None
-	promotions = _fetch_active_pos_promotions()
-	if promotions is None:
-		return None
-	content = _format_promotion_list_reply(promotions or [])
-	sources = [
-		_source_dict(
-			source_type="erpnext",
-			name="POS Promotion",
-			title=_("POS Promotion list"),
-			summary=_("Live active promotions from ERPNext"),
-			url="/app/pos-promotion",
-		)
-	]
-	return content, "Live Data", "POS Promotion", sources, False
-
-
 def _resolve_answer(message: str, session=None):
-	live_promotions = _try_build_promotion_list_reply(message)
-	if live_promotions:
-		return live_promotions
+	promotion_reply = _try_build_promotion_assistant_reply(message)
+	if promotion_reply:
+		return promotion_reply
 
 	faq_matches = _match_faq(message)
 	best_faq = _best_faq_match(message, faq_matches)

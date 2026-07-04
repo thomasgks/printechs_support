@@ -193,6 +193,27 @@ PRAI_FAQ_CATALOG: list[dict] = [
 		),
 	},
 	{
+		"title": "Complete guide to Modern POS promotions",
+		"question": "How do I configure promotion types, conditions, and benefits in Modern POS?",
+		"keywords": "promotion guide, configure promotion, promotion types, benefit types, conditions, scope, stacking, pos promotion, modern pos, erpnext, active inactive",
+		"category": "Promotions",
+		"module_area": "Modern POS",
+		"sort_order": 28,
+		"answer": (
+			"<p><strong>Modern POS promotion configuration</strong></p>"
+			"<ol>"
+			"<li><strong>POS Promotion</strong> — Create a record with code, name, dates, and scope "
+			"(Global, Store, Warehouse, or POS Profile).</li>"
+			"<li><strong>Conditions</strong> — Items, brands, categories, minimum qty/amount, customer segment, payment method.</li>"
+			"<li><strong>Benefits</strong> — Line/cart discount %, fixed amount, special price, free item, bundle, buy-X-get-Y, points multiplier.</li>"
+			"<li><strong>Activate</strong> — Is Active = Yes and Status = Active or Approved.</li>"
+			"<li><strong>Sync</strong> — Run Sync on Modern POS after every change.</li>"
+			"</ol>"
+			"<p>Ask PRAI <em>list of promotions available in modern pos</em> to see all promotions with "
+			"which ones are available on POS and why others are not.</p>"
+		),
+	},
+	{
 		"title": "How to view list of promotions in Modern POS",
 		"question": "Can I have a list of promotions available in Modern POS?",
 		"keywords": "list promotions, list of promotions, available promotions, view promotions, show promotions, see promotions, active promotions, promotion list, which promotions, what promotions, modern pos, erpnext, pos promotion",
