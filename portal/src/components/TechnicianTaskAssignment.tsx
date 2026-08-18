@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { updatePortalTaskAssignment, type PortalAssignmentUserRow } from "../api";
+import { portalAssignmentUserLabel } from "../lib/assignmentUsers";
 
 type Props = {
 	taskName: string;
@@ -70,7 +71,7 @@ export default function TechnicianTaskAssignment({ taskName, initialAssignees, u
 						<option value="">— Unassigned —</option>
 						{users.map((u) => (
 							<option key={u.name} value={u.name}>
-								{u.full_name || u.name}
+								{portalAssignmentUserLabel(u)}
 							</option>
 						))}
 					</select>
@@ -89,7 +90,7 @@ export default function TechnicianTaskAssignment({ taskName, initialAssignees, u
 											onChange={() => toggleCo(u.name)}
 											disabled={busy}
 										/>
-										<span>{u.full_name || u.name}</span>
+										<span>{portalAssignmentUserLabel(u)}</span>
 									</label>
 								</li>
 							))}

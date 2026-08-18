@@ -46,6 +46,9 @@ app_include_js = "/assets/printechs_support/js/help_widget.js"
 doctype_js = {
 	"Project": "public/js/project_printechs_support.js",
 	"Support Ticket": "public/js/support_ticket.js",
+	"PRAI Source Project": "prai_studio/doctype/prai_source_project/prai_source_project.js",
+	"PRAI Source Scan Run": "prai_studio/doctype/prai_source_scan_run/prai_source_scan_run.js",
+	"PRAI Studio Knowledge Run": "prai_studio/doctype/prai_studio_knowledge_run/prai_studio_knowledge_run.js",
 }
 # doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}

@@ -478,7 +478,7 @@ export function getPortalTeams() {
 	);
 }
 
-export type PortalAssignmentUserRow = { name: string; full_name: string };
+export type PortalAssignmentUserRow = { name: string; full_name: string; label?: string };
 
 export function getPortalAssignmentUsers() {
 	if (isPortalMockDataEnabled()) {

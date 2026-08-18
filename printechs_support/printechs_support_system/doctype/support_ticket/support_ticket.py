@@ -81,6 +81,13 @@ class SupportTicket(Document):
 		apply_ticket_metrics(self)
 		self.sync_ticket_assignees()
 		self._append_due_date_conversation_if_due_changed()
+		if not self.is_new():
+			self._prev_comment_count = frappe.db.count(
+				"Support Ticket Comment",
+				{"parent": self.name, "parenttype": "Support Ticket"},
+			)
+		else:
+			self._prev_comment_count = 0
 
 	def validate_workflow(self):
 		"""Do not run Frappe's *Workflow* DocType checks on this doctype.
@@ -104,11 +111,13 @@ class SupportTicket(Document):
 		"""
 		prev = self.get_doc_before_save()
 		has_new_comment_notification = False
-		if not self.flags.get("skip_comment_notification_hook") and prev:
-			old_rows = prev.comments or []
+		prev_count = getattr(self, "_prev_comment_count", None)
+		if prev_count is None and prev:
+			prev_count = len(prev.comments or [])
+		if not self.flags.get("skip_comment_notification_hook") and prev_count is not None:
 			new_rows = self.comments or []
-			if len(new_rows) > len(old_rows):
-				for row in new_rows[len(old_rows) :]:
+			if len(new_rows) > prev_count:
+				for row in new_rows[prev_count:]:
 					# Due-date audit lines: show in thread; do not email (noise; Version still records).
 					if (row.comment_type or "") == "System Update" and row.content and (
 						'data-printechs-audit="due-date"' in row.content

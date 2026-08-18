@@ -92,3 +92,15 @@ def ensure_printechs_support_settings():
 		return
 	doc = frappe.new_doc("Printechs Support Settings")
 	doc.insert(ignore_permissions=True)
+
+
+def ensure_prai_studio_upload_limits():
+	"""Ensure site config allows large PRAI Studio source ZIP uploads (idempotent)."""
+	min_bytes = 200 * 1024 * 1024
+	current = int(frappe.get_site_config().get("max_file_size") or 0)
+	if current >= min_bytes:
+		return
+	from frappe.installer import update_site_config
+
+	update_site_config("max_file_size", min_bytes)
+

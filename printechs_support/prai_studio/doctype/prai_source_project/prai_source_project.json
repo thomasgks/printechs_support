@@ -1,0 +1,172 @@
+{
+ "actions": [],
+ "autoname": "naming_series:",
+ "creation": "2026-07-04 00:00:00.000000",
+ "doctype": "DocType",
+ "document_type": "Document",
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "section_project",
+  "project_name",
+  "product_name",
+  "product_version",
+  "build_number",
+  "column_break_project",
+  "status",
+  "latest_scan_run",
+  "section_upload",
+  "source_zip",
+  "zip_file_name",
+  "column_break_upload",
+  "uploaded_by",
+  "uploaded_date",
+  "remarks",
+  "section_scan",
+  "scan_log"
+ ],
+ "fields": [
+  {
+   "default": "PRAI-PROJ-.YYYY.-.#####",
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Series",
+   "options": "PRAI-PROJ-.YYYY.-.#####",
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_project",
+   "fieldtype": "Section Break",
+   "label": "Project"
+  },
+  {
+   "fieldname": "project_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Project Name",
+   "reqd": 1
+  },
+  {
+   "default": "Modern POS",
+   "fieldname": "product_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Product Name",
+   "reqd": 1
+  },
+  {
+   "fieldname": "product_version",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Product Version"
+  },
+  {
+   "fieldname": "build_number",
+   "fieldtype": "Data",
+   "label": "Build Number"
+  },
+  {
+   "fieldname": "column_break_project",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Draft",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "Draft\nUploaded\nExtracting\nExtracted\nScan Failed",
+   "read_only": 1
+  },
+  {
+   "fieldname": "latest_scan_run",
+   "fieldtype": "Link",
+   "label": "Latest Scan Run",
+   "options": "PRAI Source Scan Run",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_upload",
+   "fieldtype": "Section Break",
+   "label": "Source Upload"
+  },
+  {
+   "description": "Upload Modern POS source code as a .zip file (internal use only).",
+   "fieldname": "source_zip",
+   "fieldtype": "Attach",
+   "label": "ZIP File",
+   "reqd": 1
+  },
+  {
+   "fieldname": "zip_file_name",
+   "fieldtype": "Data",
+   "label": "ZIP File Name",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_upload",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "uploaded_by",
+   "fieldtype": "Link",
+   "label": "Uploaded By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "uploaded_date",
+   "fieldtype": "Datetime",
+   "label": "Uploaded Date",
+   "read_only": 1
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Small Text",
+   "label": "Remarks"
+  },
+  {
+   "fieldname": "section_scan",
+   "fieldtype": "Section Break",
+   "label": "Extraction Log"
+  },
+  {
+   "fieldname": "scan_log",
+   "fieldtype": "Text",
+   "label": "Scan Log",
+   "read_only": 1
+  }
+ ],
+ "links": [
+  {
+   "group": "Scan",
+   "link_doctype": "PRAI Source Scan Run",
+   "link_fieldname": "source_project"
+  }
+ ],
+ "modified": "2026-07-04 00:00:00.000000",
+ "module": "PRAI Studio",
+ "name": "PRAI Source Project",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "title_field": "project_name",
+ "track_changes": 1
+}

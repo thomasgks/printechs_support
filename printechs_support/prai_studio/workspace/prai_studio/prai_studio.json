@@ -1,0 +1,153 @@
+{
+ "charts": [],
+ "content": "[{\"id\":\"ps_hdr\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>PRAI Studio</b></span>\",\"col\":12}},{\"id\":\"ps_desc\",\"type\":\"paragraph\",\"data\":{\"text\":\"Upload Modern POS source, analyze code, generate draft FAQs, review, and publish to the live PRAI Agent.\",\"col\":12}},{\"id\":\"ps_sc1\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"PRAI Source Project\",\"col\":3}},{\"id\":\"ps_sc2\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"PRAI Studio Knowledge Run\",\"col\":3}},{\"id\":\"ps_sc3\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"PRAI Publish Log\",\"col\":3}},{\"id\":\"ps_sp\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"ps_hdr2\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h5\\\"><b>Source & Analysis</b></span>\",\"col\":12}},{\"id\":\"ps_c1\",\"type\":\"card\",\"data\":{\"card_name\":\"Source & Scan\",\"col\":4}},{\"id\":\"ps_hdr3\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h5\\\"><b>Review & Publish</b></span>\",\"col\":12}},{\"id\":\"ps_c2\",\"type\":\"card\",\"data\":{\"card_name\":\"Review & Publish\",\"col\":4}}]",
+ "creation": "2026-07-04 00:00:00.000000",
+ "custom_blocks": [],
+ "docstatus": 0,
+ "doctype": "Workspace",
+ "for_user": "",
+ "hide_custom": 0,
+ "icon": "tool",
+ "idx": 0,
+ "is_hidden": 0,
+ "label": "PRAI Studio",
+ "links": [
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Studio Dashboard",
+   "link_count": 0,
+   "onboard": 1,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "PRAI Source Project",
+   "link_count": 0,
+   "link_to": "PRAI Source Project",
+   "link_type": "DocType",
+   "onboard": 1,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Source & Scan",
+   "link_count": 2,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Source Code Upload",
+   "link_count": 0,
+   "link_to": "PRAI Source Project",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Scan Results",
+   "link_count": 0,
+   "link_to": "PRAI Source Scan Run",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Review & Publish",
+   "link_count": 4,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Knowledge Runs",
+   "link_count": 0,
+   "link_to": "PRAI Studio Knowledge Run",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Live PRAI FAQ",
+   "link_count": 0,
+   "link_to": "PRAI FAQ",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Help Center Articles",
+   "link_count": 0,
+   "link_to": "Help Article",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Health Rule Templates",
+   "link_count": 0,
+   "link_to": "PRAI Studio Health Rule Template",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Publish Log",
+   "link_count": 0,
+   "link_to": "PRAI Publish Log",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  }
+ ],
+ "module": "PRAI Studio",
+ "name": "PRAI Studio",
+ "number_cards": [],
+ "owner": "Administrator",
+ "parent_page": "",
+ "public": 1,
+ "quick_lists": [],
+ "roles": [],
+ "sequence_id": 20.0,
+ "shortcuts": [
+  {
+   "color": "Blue",
+   "doc_view": "List",
+   "label": "PRAI Source Project",
+   "link_to": "PRAI Source Project",
+   "type": "DocType"
+  },
+  {
+   "color": "Orange",
+   "doc_view": "List",
+   "label": "PRAI Studio Knowledge Run",
+   "link_to": "PRAI Studio Knowledge Run",
+   "type": "DocType"
+  },
+  {
+   "color": "Green",
+   "doc_view": "List",
+   "label": "PRAI Publish Log",
+   "link_to": "PRAI Publish Log",
+   "type": "DocType"
+  }
+ ],
+ "title": "PRAI Studio"
+}

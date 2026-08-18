@@ -524,24 +524,28 @@ def get_portal_assignment_users(limit: int = 200):
 	placeholders = ",".join(["%s"] * len(_ASSIGNMENT_ROLES))
 	rows = frappe.db.sql(
 		f"""
-		SELECT DISTINCT u.name, u.full_name
+		SELECT u.name, u.full_name
 		FROM `tabUser` u
 		INNER JOIN `tabHas Role` hr ON hr.parent = u.name AND hr.parenttype = 'User'
 		WHERE u.enabled = 1 AND u.name != 'Guest'
 		AND hr.role IN ({placeholders})
-		ORDER BY u.full_name ASC
+		GROUP BY u.name
+		ORDER BY u.full_name ASC, u.name ASC
 		LIMIT %s
 		""",
 		tuple(_ASSIGNMENT_ROLES) + (limit,),
-		as_dict=False,
+		as_dict=True,
 	)
-	return {
-		"users": [
-			{"name": r[0], "full_name": (r[1] or r[0]).strip()}
-			for r in rows
-			if r[0] and r[0] != "Guest"
-		]
-	}
+	users = [
+		{"name": r.name, "full_name": (r.full_name or r.name).strip()}
+		for r in rows
+		if r.name and r.name != "Guest"
+	]
+	name_counts = Counter(u["full_name"] for u in users)
+	for u in users:
+		fn = u["full_name"]
+		u["label"] = fn if name_counts[fn] == 1 else f"{fn} ({u['name']})"
+	return {"users": users}
 
 
 @frappe.whitelist()
@@ -1708,6 +1712,7 @@ def _apply_support_ticket_status_via_portal(
 
 	sync_waiting_side_fields(doc)
 	doc.flags.workflow_transition = True
+	comment_start = len(doc.comments or [])
 	try:
 		if customer_confirmation_html:
 			doc.append(
@@ -1735,6 +1740,15 @@ def _apply_support_ticket_status_via_portal(
 		doc.save(ignore_permissions=True)
 	finally:
 		doc.flags.workflow_transition = False
+
+	from printechs_support.printechs_support_system.api.ticket_comment_emails import (
+		notify_support_ticket_comments_from_index,
+	)
+
+	try:
+		notify_support_ticket_comments_from_index(ticket_name, comment_start)
+	except Exception:
+		frappe.log_error(frappe.get_traceback(), "Support Ticket status update email")
 
 
 def _get_portal_doc(doctype: str, name: str):
@@ -2049,105 +2063,108 @@ def add_portal_ticket_comment(
 	ss_early = (set_status or "").strip()
 	skip_customer_wfc_for_staff_intent = False
 	staff_reply_intent_value = ""
-
-	# Internal staff: optional smart workflow when posting a customer-visible reply (portal intent).
-	if internal and visible and not ss_early:
-		tr = (technician_reply_effect or "").strip().lower().replace("-", "_")
-		if tr in ("normal_reply", "expect_customer_response"):
-			from printechs_support.printechs_support_system.api import ticket_workflow as tw
-
-			skip_customer_wfc_for_staff_intent = True
-			cur_for_staff = (frappe.db.get_value("Support Ticket", ticket_name, "status") or "").strip()
-			if cur_for_staff not in ("Closed", "Cancelled"):
-				plain_staff = (strip_html(safe) or "").strip() or (
-					_("Shared an attachment.") if att_name else _("(message)")
-				)
-				if tr == "expect_customer_response":
-					staff_reply_intent_value = "Expect Customer Response"
-					tw.technician_request_customer_input(ticket_name, plain_staff, user=user)
-				elif tr == "normal_reply":
-					staff_reply_intent_value = "Normal Reply"
-					if cur_for_staff != "Waiting for Customer":
-						tw.technician_send_work_update(ticket_name, plain_staff, user=user)
-					# Waiting for Customer + “normal”: do not call work_update (would break routing).
-
-	# While “Waiting for Customer”, a **customer-visible** reply can hand the ticket back to support.
-	# Use the same “is this user the customer for this ticket?” rule as desk workflow (not ``not internal``),
-	# so staff with both internal + customer roles, and agreement-linked contacts, are not stuck.
-	if visible and not skip_customer_wfc_for_staff_intent:
-		cur_st = frappe.db.get_value("Support Ticket", ticket_name, "status")
-		if (cur_st or "").strip() == "Waiting for Customer":
-			from printechs_support.printechs_support_system.api.ticket_workflow import (
-				_assert_customer,
-				customer_informational_reply,
-				customer_provide_requested_information,
-			)
-
-			doc_gate = frappe.get_cached_doc("Support Ticket", ticket_name)
-			try:
-				_assert_customer(doc_gate, user)
-			except (frappe.PermissionError, frappe.ValidationError):
-				pass
-			else:
-				mode = (reply_mode or "").strip().lower().replace("-", "_")
-				plain = (strip_html(safe) or "").strip() or (
-					_("Shared an attachment.") if att_name else _("(message)")
-				)
-				if mode in ("acknowledgement_only", "acknowledgement", "informational"):
-					customer_informational_reply(ticket_name, plain, user=user)
-				else:
-					customer_provide_requested_information(ticket_name, plain, user=user)
-
-	doc = _get_portal_doc("Support Ticket", ticket_name)
-	row_data = {
-		"comment_type": comment_type,
-		"comment_by": user,
-		"comment_on": frappe.utils.now(),
-		"is_customer_visible": visible,
-		"content": safe,
-	}
-	if staff_reply_intent_value:
-		row_data["staff_reply_intent"] = staff_reply_intent_value
-	if reply_to_name and reply_row:
-		row_data["in_reply_to"] = reply_to_name
-	if att_name:
-		row_data["attachment"] = att_name
-	doc.append(
-		"comments",
-		row_data,
-	)
-	# Child-table diff is often missing in on_update's get_doc_before_save(); notify after save instead.
-	doc.flags.skip_comment_notification_hook = True
-	doc.save(ignore_permissions=True)
-
-	frappe.db.set_value(
-		"Support Ticket",
-		ticket_name,
-		"last_customer_update_on" if visible else "last_internal_update_on",
-		frappe.utils.now(),
-	)
-
-	from printechs_support.printechs_support_system.api.ticket_comment_emails import notify_ticket_comment
-
+	frappe.flags.skip_workflow_comment_notification = True
 	try:
-		notify_ticket_comment(
-			ticket_name,
-			comment_type=comment_type,
-			comment_by=user,
-			content_html=safe,
-			is_internal_note=not bool(visible),
-			author_is_internal=internal,
-		)
-	except Exception:
-		frappe.log_error(frappe.get_traceback(), "portal add_portal_ticket_comment notify")
+		# Internal staff: optional smart workflow when posting a customer-visible reply (portal intent).
+		if internal and visible and not ss_early:
+			tr = (technician_reply_effect or "").strip().lower().replace("-", "_")
+			if tr in ("normal_reply", "expect_customer_response"):
+				from printechs_support.printechs_support_system.api import ticket_workflow as tw
 
-	ss = ss_early or (set_status or "").strip()
-	if ss:
-		if not internal:
-			frappe.throw(_("Not permitted"), frappe.PermissionError)
-		if ss not in _SUPPORT_TICKET_STATUSES:
-			frappe.throw(_("Invalid status"), frappe.ValidationError)
-		_apply_support_ticket_status_via_portal(ticket_name, ss, user)
+				skip_customer_wfc_for_staff_intent = True
+				cur_for_staff = (frappe.db.get_value("Support Ticket", ticket_name, "status") or "").strip()
+				if cur_for_staff not in ("Closed", "Cancelled"):
+					plain_staff = (strip_html(safe) or "").strip() or (
+						_("Shared an attachment.") if att_name else _("(message)")
+					)
+					if tr == "expect_customer_response":
+						staff_reply_intent_value = "Expect Customer Response"
+						tw.technician_request_customer_input(ticket_name, plain_staff, user=user)
+					elif tr == "normal_reply":
+						staff_reply_intent_value = "Normal Reply"
+						if cur_for_staff != "Waiting for Customer":
+							tw.technician_send_work_update(ticket_name, plain_staff, user=user)
+						# Waiting for Customer + “normal”: do not call work_update (would break routing).
+
+		# While “Waiting for Customer”, a **customer-visible** reply can hand the ticket back to support.
+		# Use the same “is this user the customer for this ticket?” rule as desk workflow (not ``not internal``),
+		# so staff with both internal + customer roles, and agreement-linked contacts, are not stuck.
+		if visible and not skip_customer_wfc_for_staff_intent:
+			cur_st = frappe.db.get_value("Support Ticket", ticket_name, "status")
+			if (cur_st or "").strip() == "Waiting for Customer":
+				from printechs_support.printechs_support_system.api.ticket_workflow import (
+					_assert_customer,
+					customer_informational_reply,
+					customer_provide_requested_information,
+				)
+
+				doc_gate = frappe.get_cached_doc("Support Ticket", ticket_name)
+				try:
+					_assert_customer(doc_gate, user)
+				except (frappe.PermissionError, frappe.ValidationError):
+					pass
+				else:
+					mode = (reply_mode or "").strip().lower().replace("-", "_")
+					plain = (strip_html(safe) or "").strip() or (
+						_("Shared an attachment.") if att_name else _("(message)")
+					)
+					if mode in ("acknowledgement_only", "acknowledgement", "informational"):
+						customer_informational_reply(ticket_name, plain, user=user)
+					else:
+						customer_provide_requested_information(ticket_name, plain, user=user)
+
+		doc = _get_portal_doc("Support Ticket", ticket_name)
+		row_data = {
+			"comment_type": comment_type,
+			"comment_by": user,
+			"comment_on": frappe.utils.now(),
+			"is_customer_visible": visible,
+			"content": safe,
+		}
+		if staff_reply_intent_value:
+			row_data["staff_reply_intent"] = staff_reply_intent_value
+		if reply_to_name and reply_row:
+			row_data["in_reply_to"] = reply_to_name
+		if att_name:
+			row_data["attachment"] = att_name
+		doc.append(
+			"comments",
+			row_data,
+		)
+		# Child-table diff is often missing in on_update's get_doc_before_save(); notify after save instead.
+		doc.flags.skip_comment_notification_hook = True
+		doc.save(ignore_permissions=True)
+
+		frappe.db.set_value(
+			"Support Ticket",
+			ticket_name,
+			"last_customer_update_on" if visible else "last_internal_update_on",
+			frappe.utils.now(),
+		)
+
+		from printechs_support.printechs_support_system.api.ticket_comment_emails import notify_ticket_comment
+
+		try:
+			notify_ticket_comment(
+				ticket_name,
+				comment_type=comment_type,
+				comment_by=user,
+				content_html=safe,
+				is_internal_note=not bool(visible),
+				author_is_internal=internal,
+			)
+		except Exception:
+			frappe.log_error(frappe.get_traceback(), "portal add_portal_ticket_comment notify")
+
+		ss = ss_early or (set_status or "").strip()
+		if ss:
+			if not internal:
+				frappe.throw(_("Not permitted"), frappe.PermissionError)
+			if ss not in _SUPPORT_TICKET_STATUSES:
+				frappe.throw(_("Invalid status"), frappe.ValidationError)
+			_apply_support_ticket_status_via_portal(ticket_name, ss, user)
+	finally:
+		frappe.flags.skip_workflow_comment_notification = False
 
 	cur_status = frappe.db.get_value("Support Ticket", ticket_name, "status")
 	return {"ok": True, "ticket_status": cur_status}
@@ -2422,12 +2439,33 @@ def add_portal_task_comment(
 			frappe.throw(_("Not permitted"), frappe.PermissionError)
 		if ts not in _SUPPORT_TASK_STATUSES:
 			frappe.throw(_("Invalid status"), frappe.ValidationError)
-		prev = frappe.flags.ignore_permissions
-		frappe.flags.ignore_permissions = True
-		try:
-			frappe.db.set_value("Support Task", task_name, "status", ts)
-		finally:
-			frappe.flags.ignore_permissions = prev
+		task_doc = _get_portal_doc("Support Task", task_name)
+		old_status = task_doc.status or ""
+		if old_status != ts:
+			comment_start = len(task_doc.comments or [])
+			task_doc.status = ts
+			task_doc.append(
+				"comments",
+				{
+					"comment_type": "System Update",
+					"comment_by": user,
+					"comment_on": frappe.utils.now(),
+					"is_customer_visible": 1,
+					"content": sanitize_html(
+						f"<p><strong>Status</strong> updated from <em>{html_escape(old_status)}</em> to <em>{html_escape(ts)}</em></p>"
+					),
+				},
+			)
+			task_doc.flags.skip_comment_notification_hook = True
+			task_doc.save(ignore_permissions=True)
+			from printechs_support.printechs_support_system.api.ticket_comment_emails import (
+				notify_support_task_comments_from_index,
+			)
+
+			try:
+				notify_support_task_comments_from_index(task_name, comment_start)
+			except Exception:
+				frappe.log_error(frappe.get_traceback(), "Support Task status update email")
 
 	cur_task = frappe.db.get_value("Support Task", task_name, "status")
 	return {"ok": True, "task_status": cur_task}
@@ -2846,6 +2884,14 @@ def update_portal_task_assignment(task_name: str, assignees=None):
 			"assigned_users": users,
 		}
 
+	prev_assignees: set[str] = set()
+	if (doc.assigned_to_user or "").strip():
+		prev_assignees.add((doc.assigned_to_user or "").strip())
+	for row in doc.task_assignees or []:
+		u = getattr(row, "user", None)
+		if u:
+			prev_assignees.add(str(u).strip())
+
 	doc.task_assignees = []
 	doc.assigned_to_user = None
 	seen = set()
@@ -2861,6 +2907,16 @@ def update_portal_task_assignment(task_name: str, assignees=None):
 
 	doc.save(ignore_permissions=True)
 	users = _assignee_users_by_parent("Support Task Assignee", [task_name]).get(task_name, [])
+	new_users = {u for u in users if u} - prev_assignees
+	if new_users:
+		try:
+			from printechs_support.printechs_support_system.api.support_task_alerts import (
+				notify_support_task_new_assignees,
+			)
+
+			notify_support_task_new_assignees(task_name, new_assignee_users=new_users, actor=user)
+		except Exception:
+			frappe.log_error(frappe.get_traceback(), "Support Task assignee email (portal)")
 	return {"ok": True, "assigned_to_user": doc.assigned_to_user or "", "assigned_users": users}
 
 
@@ -3062,6 +3118,7 @@ def mark_ticket_awaiting_customer_resolution(ticket_name: str, hours: int = 24):
 	)
 
 	doc = _get_portal_doc("Support Ticket", ticket_name)
+	comment_start = len(doc.comments or [])
 	doc.append(
 		"comments",
 		{
@@ -3078,6 +3135,14 @@ def mark_ticket_awaiting_customer_resolution(ticket_name: str, hours: int = 24):
 		},
 	)
 	doc.save(ignore_permissions=True)
+	from printechs_support.printechs_support_system.api.ticket_comment_emails import (
+		notify_support_ticket_comments_from_index,
+	)
+
+	try:
+		notify_support_ticket_comments_from_index(ticket_name, comment_start)
+	except Exception:
+		frappe.log_error(frappe.get_traceback(), "Support Ticket confirmation request email")
 	return {"ok": True, "customer_resolution_deadline": str(deadline)}
 
 

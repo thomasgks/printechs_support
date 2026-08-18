@@ -27,6 +27,17 @@ class SupportTask(Document):
 		self.sync_task_assignees()
 		self.ensure_schedule_defaults()
 		self.update_delay_fields()
+		if not self.is_new():
+			self._prev_comment_count = frappe.db.count(
+				"Support Task Comment",
+				{"parent": self.name, "parenttype": "Support Task"},
+			)
+			self._prev_assignee_users = self._current_assignee_users_from_db()
+			self._prev_due_date = frappe.db.get_value("Support Task", self.name, "due_date")
+		else:
+			self._prev_comment_count = 0
+			self._prev_assignee_users = set()
+			self._prev_due_date = None
 
 	def _set_naming_series(self):
 		if not (self.naming_series or "").strip():
@@ -65,6 +76,14 @@ class SupportTask(Document):
 		from printechs_support.project_task_sync import sync_erpnext_task_from_support_task
 
 		sync_erpnext_task_from_support_task(self)
+		if getattr(frappe.flags, "in_test", False):
+			return
+		try:
+			from printechs_support.printechs_support_system.api.support_task_alerts import notify_support_task_created
+
+			notify_support_task_created(self.name)
+		except Exception:
+			frappe.log_error(frappe.get_traceback(), "Support Task creation email")
 
 	def on_update(self):
 		from printechs_support.project_task_sync import sync_erpnext_task_from_support_task
@@ -79,6 +98,28 @@ class SupportTask(Document):
 				sync_support_ticket_due_from_task(self.name)
 
 		self._notify_new_task_comments()
+		self._notify_assignee_changes()
+		self._notify_due_date_change()
+
+	def _notify_due_date_change(self) -> None:
+		prev_due = getattr(self, "_prev_due_date", None)
+		if prev_due is None and not self.is_new():
+			prev = self.get_doc_before_save()
+			prev_due = prev.due_date if prev else None
+		if (prev_due or None) == (self.due_date or None):
+			return
+		try:
+			from printechs_support.printechs_support_system.api.support_task_alerts import (
+				notify_support_task_due_date_changed,
+			)
+
+			notify_support_task_due_date_changed(
+				self.name,
+				old_due=prev_due,
+				new_due=self.due_date,
+			)
+		except Exception:
+			frappe.log_error(frappe.get_traceback(), "Support Task due date email")
 
 	def _notify_new_task_comments(self):
 		"""Email assignees / customer when task thread rows are added (Desk or import).
@@ -87,18 +128,20 @@ class SupportTask(Document):
 		"""
 		if self.flags.get("skip_comment_notification_hook"):
 			return
-		prev = self.get_doc_before_save()
-		if not prev:
-			return
-		old_rows = prev.comments or []
+		prev_count = getattr(self, "_prev_comment_count", None)
+		if prev_count is None:
+			prev = self.get_doc_before_save()
+			if not prev:
+				return
+			prev_count = len(prev.comments or [])
 		new_rows = self.comments or []
-		if len(new_rows) <= len(old_rows):
+		if len(new_rows) <= prev_count:
 			return
 
 		from printechs_support.permissions import user_sees_all_support_records
 		from printechs_support.printechs_support_system.api.ticket_comment_emails import notify_task_comment
 
-		for row in new_rows[len(old_rows) :]:
+		for row in new_rows[prev_count:]:
 			visible = int(row.is_customer_visible or 0)
 			is_internal_note = not bool(visible)
 			by = row.comment_by or frappe.session.user
@@ -113,6 +156,48 @@ class SupportTask(Document):
 				)
 			except Exception:
 				frappe.log_error(frappe.get_traceback(), "Support Task comment notify (Desk)")
+
+	def _current_assignee_users_from_db(self) -> set[str]:
+		if not self.name:
+			return set()
+		rows = frappe.get_all(
+			"Support Task Assignee",
+			filters={"parent": self.name, "parenttype": "Support Task"},
+			pluck="user",
+		)
+		out = {str(u).strip() for u in rows if u}
+		primary = (frappe.db.get_value("Support Task", self.name, "assigned_to_user") or "").strip()
+		if primary:
+			out.add(primary)
+		return out
+
+	def _current_assignee_users(self) -> set[str]:
+		out: set[str] = set()
+		primary = (self.assigned_to_user or "").strip()
+		if primary:
+			out.add(primary)
+		for row in self.task_assignees or []:
+			u = getattr(row, "user", None)
+			if u:
+				out.add(str(u).strip())
+		return out
+
+	def _notify_assignee_changes(self) -> None:
+		prev = getattr(self, "_prev_assignee_users", None)
+		if prev is None:
+			return
+		current = self._current_assignee_users()
+		new_users = current - prev
+		if not new_users:
+			return
+		try:
+			from printechs_support.printechs_support_system.api.support_task_alerts import (
+				notify_support_task_new_assignees,
+			)
+
+			notify_support_task_new_assignees(self.name, new_assignee_users=new_users)
+		except Exception:
+			frappe.log_error(frappe.get_traceback(), "Support Task assignee email")
 
 	def sync_task_assignees(self):
 		sync_user_assignee_rows(self, child_field="task_assignees", primary_field="assigned_to_user")

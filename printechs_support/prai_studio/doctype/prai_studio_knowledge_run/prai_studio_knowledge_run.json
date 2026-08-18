@@ -1,0 +1,270 @@
+{
+ "actions": [],
+ "autoname": "naming_series:",
+ "creation": "2026-07-04 12:00:00.000000",
+ "doctype": "DocType",
+ "document_type": "Document",
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "section_links",
+  "source_project",
+  "source_scan_run",
+  "column_break_links",
+  "status",
+  "latest_publish_log",
+  "section_product",
+  "product_name",
+  "product_version",
+  "section_defaults",
+  "default_category",
+  "default_module_area",
+  "column_break_defaults",
+  "use_openai",
+  "update_existing",
+  "generate_help_articles",
+  "default_help_category",
+  "update_existing_help",
+  "section_health",
+  "health_check_log",
+  "health_check_results",
+  "analysis_summary",
+  "analysis_log",
+  "section_findings",
+  "analysis_findings",
+  "section_drafts",
+  "generation_log",
+  "draft_items"
+ ],
+ "fields": [
+  {
+   "default": "PRAI-KNOW-.YYYY.-.#####",
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Series",
+   "options": "PRAI-KNOW-.YYYY.-.#####",
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_links",
+   "fieldtype": "Section Break",
+   "label": "Source"
+  },
+  {
+   "fieldname": "source_project",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Source Project",
+   "options": "PRAI Source Project",
+   "reqd": 1
+  },
+  {
+   "fieldname": "source_scan_run",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Source Scan Run",
+   "options": "PRAI Source Scan Run",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_links",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Draft",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "Draft\nAnalyzing\nAnalyzed\nGenerating\nGenerated\nIn Review\nPublished\nFailed",
+   "read_only": 1
+  },
+  {
+   "fieldname": "latest_publish_log",
+   "fieldtype": "Link",
+   "label": "Latest Publish Log",
+   "options": "PRAI Publish Log",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_product",
+   "fieldtype": "Section Break",
+   "label": "Product"
+  },
+  {
+   "default": "Modern POS",
+   "fieldname": "product_name",
+   "fieldtype": "Data",
+   "label": "Product Name"
+  },
+  {
+   "fieldname": "product_version",
+   "fieldtype": "Data",
+   "label": "Product Version"
+  },
+  {
+   "fieldname": "section_defaults",
+   "fieldtype": "Section Break",
+   "label": "Generation Defaults"
+  },
+  {
+   "default": "Modern POS",
+   "fieldname": "default_category",
+   "fieldtype": "Select",
+   "label": "Default Category",
+   "options": "Modern POS\nERPNext\nPromotions\nStock\nLoyalty\nE-Wallet\nTroubleshooting\nGeneral"
+  },
+  {
+   "default": "Modern POS",
+   "fieldname": "default_module_area",
+   "fieldtype": "Select",
+   "label": "Default Module Area",
+   "options": "Modern POS\nSupport\nWMS\nERPNext\nSales\nPurchase\nStock\nAccounts\nHR\nGeneral"
+  },
+  {
+   "fieldname": "column_break_defaults",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "1",
+   "description": "Use OpenAI to enrich analyzer output into structured FAQs (requires OpenAI in Printechs Support Settings).",
+   "fieldname": "use_openai",
+   "fieldtype": "Check",
+   "label": "Use OpenAI for FAQ Generation"
+  },
+  {
+   "default": "1",
+   "fieldname": "update_existing",
+   "fieldtype": "Check",
+   "label": "Update Existing PRAI FAQs by Title on Publish"
+  },
+  {
+   "default": "1",
+   "fieldname": "generate_help_articles",
+   "fieldtype": "Check",
+   "label": "Generate Help Articles"
+  },
+  {
+   "default": "ERPNext Basics",
+   "fieldname": "default_help_category",
+   "fieldtype": "Link",
+   "label": "Default Help Category",
+   "options": "Help Category"
+  },
+  {
+   "default": "1",
+   "fieldname": "update_existing_help",
+   "fieldtype": "Check",
+   "label": "Update Existing Help Articles on Publish"
+  },
+  {
+   "fieldname": "section_health",
+   "fieldtype": "Section Break",
+   "label": "Health Checks"
+  },
+  {
+   "fieldname": "health_check_log",
+   "fieldtype": "Small Text",
+   "label": "Health Check Log",
+   "read_only": 1
+  },
+  {
+   "fieldname": "health_check_results",
+   "fieldtype": "Table",
+   "label": "Health Check Results",
+   "options": "PRAI Studio Health Check Result",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_analysis",
+   "fieldtype": "Section Break",
+   "label": "Analysis"
+  },
+  {
+   "fieldname": "analysis_summary",
+   "fieldtype": "Long Text",
+   "label": "Analysis Summary",
+   "read_only": 1
+  },
+  {
+   "fieldname": "analysis_log",
+   "fieldtype": "Small Text",
+   "label": "Analysis Log",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_findings",
+   "fieldtype": "Section Break",
+   "label": "Analyzer Findings"
+  },
+  {
+   "fieldname": "analysis_findings",
+   "fieldtype": "Table",
+   "label": "Findings",
+   "options": "PRAI Studio Analysis Finding",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_drafts",
+   "fieldtype": "Section Break",
+   "label": "Draft FAQs"
+  },
+  {
+   "fieldname": "generation_log",
+   "fieldtype": "Small Text",
+   "label": "Generation Log",
+   "read_only": 1
+  },
+  {
+   "description": "Draft FAQs stay separate from live PRAI FAQ until approved and published.",
+   "fieldname": "draft_items",
+   "fieldtype": "Table",
+   "label": "Draft FAQ Items",
+   "options": "PRAI Studio FAQ Draft Line"
+  },
+  {
+   "fieldname": "section_help_drafts",
+   "fieldtype": "Section Break",
+   "label": "Draft Help Articles"
+  },
+  {
+   "fieldname": "draft_help_items",
+   "fieldtype": "Table",
+   "label": "Draft Help Article Items",
+   "options": "PRAI Studio Help Article Draft Line"
+  }
+ ],
+ "links": [
+  {
+   "group": "Publish",
+   "link_doctype": "PRAI Publish Log",
+   "link_fieldname": "knowledge_run"
+  }
+ ],
+ "modified": "2026-07-04 12:00:00.000000",
+ "module": "PRAI Studio",
+ "name": "PRAI Studio Knowledge Run",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "title_field": "source_project",
+ "track_changes": 1
+}

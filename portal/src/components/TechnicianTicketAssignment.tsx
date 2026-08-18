@@ -4,6 +4,7 @@ import {
 	type PortalAssignmentUserRow,
 	type PortalTeamRow,
 } from "../api";
+import { portalAssignmentUserLabel } from "../lib/assignmentUsers";
 
 type Props = {
 	ticketName: string;
@@ -95,7 +96,7 @@ export default function TechnicianTicketAssignment({
 						<option value="">— Unassigned —</option>
 						{users.map((u) => (
 							<option key={u.name} value={u.name}>
-								{u.full_name || u.name}
+								{portalAssignmentUserLabel(u)}
 							</option>
 						))}
 					</select>

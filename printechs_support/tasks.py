@@ -65,6 +65,7 @@ def auto_resolve_support_tickets_past_deadline():
 		doc = frappe.get_doc("Support Ticket", name)
 		prev = frappe.flags.ignore_permissions
 		frappe.flags.ignore_permissions = True
+		comment_start = len(doc.comments or [])
 		try:
 			doc.append(
 				"comments",
@@ -84,6 +85,14 @@ def auto_resolve_support_tickets_past_deadline():
 			doc.save()
 		finally:
 			frappe.flags.ignore_permissions = prev
+		try:
+			from printechs_support.printechs_support_system.api.ticket_comment_emails import (
+				notify_support_ticket_comments_from_index,
+			)
+
+			notify_support_ticket_comments_from_index(name, comment_start)
+		except Exception:
+			frappe.log_error(frappe.get_traceback(), "Support Ticket auto-resolve email")
 
 
 def _auto_close_resolved_after_days() -> int:
@@ -137,6 +146,7 @@ def auto_close_resolved_support_tickets_past_deadline():
 		doc = frappe.get_doc("Support Ticket", name)
 		prev = frappe.flags.ignore_permissions
 		frappe.flags.ignore_permissions = True
+		comment_start = len(doc.comments or [])
 		try:
 			doc.append(
 				"comments",
@@ -156,6 +166,14 @@ def auto_close_resolved_support_tickets_past_deadline():
 			doc.save()
 		finally:
 			frappe.flags.ignore_permissions = prev
+		try:
+			from printechs_support.printechs_support_system.api.ticket_comment_emails import (
+				notify_support_ticket_comments_from_index,
+			)
+
+			notify_support_ticket_comments_from_index(name, comment_start)
+		except Exception:
+			frappe.log_error(frappe.get_traceback(), "Support Ticket auto-close email")
 
 
 def daily():

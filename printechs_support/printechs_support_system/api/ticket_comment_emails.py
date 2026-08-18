@@ -185,6 +185,109 @@ def _email_author_role(*, author_is_internal: bool) -> str:
 	return _("Technician") if author_is_internal else _("Customer")
 
 
+def _should_skip_comment_email_row(row) -> bool:
+	"""Due-date audit lines stay in the thread but must not trigger email."""
+	comment_type = getattr(row, "comment_type", None) or (row.get("comment_type") if isinstance(row, dict) else "")
+	content = getattr(row, "content", None) or (row.get("content") if isinstance(row, dict) else "")
+	return (comment_type or "") == "System Update" and content and ('data-printechs-audit="due-date"' in content)
+
+
+def _comment_row_fields(row) -> tuple[str, str, str, bool]:
+	visible = int(getattr(row, "is_customer_visible", 0) or (row.get("is_customer_visible") if isinstance(row, dict) else 0) or 0)
+	is_internal_note = not bool(visible)
+	by = getattr(row, "comment_by", None) or (row.get("comment_by") if isinstance(row, dict) else None) or frappe.session.user
+	content = getattr(row, "content", None) or (row.get("content") if isinstance(row, dict) else None) or ""
+	comment_type = getattr(row, "comment_type", None) or (row.get("comment_type") if isinstance(row, dict) else None) or "Comment"
+	return comment_type, by, content, is_internal_note
+
+
+def notify_support_ticket_comments_from_index(ticket_name: str, start_index: int) -> None:
+	"""Email for comment rows appended since ``start_index`` (portal/status saves)."""
+	if start_index < 0:
+		return
+	from printechs_support.permissions import user_sees_all_support_records
+
+	try:
+		ticket = frappe.get_doc("Support Ticket", ticket_name)
+	except Exception:
+		return
+	rows = ticket.comments or []
+	for row in rows[start_index:]:
+		if _should_skip_comment_email_row(row):
+			continue
+		comment_type, by, content, is_internal_note = _comment_row_fields(row)
+		try:
+			notify_ticket_comment(
+				ticket_name,
+				comment_type=comment_type,
+				comment_by=by,
+				content_html=content,
+				is_internal_note=is_internal_note,
+				author_is_internal=user_sees_all_support_records(by),
+			)
+		except Exception:
+			frappe.log_error(frappe.get_traceback(), "Support Ticket comment notify (explicit)")
+
+
+def notify_support_task_comments_from_index(task_name: str, start_index: int) -> None:
+	"""Email for task comment rows appended since ``start_index``."""
+	if start_index < 0:
+		return
+	from printechs_support.permissions import user_sees_all_support_records
+
+	try:
+		task = frappe.get_doc("Support Task", task_name)
+	except Exception:
+		return
+	rows = task.comments or []
+	for row in rows[start_index:]:
+		if _should_skip_comment_email_row(row):
+			continue
+		comment_type, by, content, is_internal_note = _comment_row_fields(row)
+		try:
+			notify_task_comment(
+				task_name,
+				comment_type=comment_type,
+				comment_by=by,
+				content_html=content,
+				is_internal_note=is_internal_note,
+				author_is_internal=user_sees_all_support_records(by),
+			)
+		except Exception:
+			frappe.log_error(frappe.get_traceback(), "Support Task comment notify (explicit)")
+
+
+def notify_workflow_ticket_message(
+	ticket_name: str,
+	*,
+	user: str,
+	message: str,
+	reply_type: str,
+	is_internal: bool,
+) -> None:
+	"""Email for structured workflow messages stored in ``workflow_log`` only."""
+	text = (message or "").strip()
+	if not text:
+		return
+	from frappe.utils import sanitize_html
+
+	from printechs_support.permissions import user_sees_all_support_records
+
+	comment_type = reply_type if reply_type in ("Reopen Issue",) else "Customer Reply"
+	content_html = sanitize_html(f"<p>{html_escape(text)}</p>")
+	try:
+		notify_ticket_comment(
+			ticket_name,
+			comment_type=comment_type,
+			comment_by=user,
+			content_html=content_html,
+			is_internal_note=is_internal,
+			author_is_internal=user_sees_all_support_records(user),
+		)
+	except Exception:
+		frappe.log_error(frappe.get_traceback(), "Support Ticket workflow email")
+
+
 def notify_ticket_comment(
 	ticket_name: str,
 	*,
@@ -257,6 +360,8 @@ def notify_ticket_comment(
 	if author_is_internal:
 		customer_to = [e for e in customer_emails if e != author_em]
 		team_to = [e for e in team_emails if e != author_em] if notify_team else []
+		if notify_team and not team_to and team_emails:
+			team_to = list(team_emails)
 		if customer_to:
 			subj_c = _("Update on your support ticket {0}").format(ticket_name)
 			msg_c = _html_email(
@@ -310,6 +415,8 @@ def notify_ticket_comment(
 	if not notify_team:
 		return
 	team_to = [e for e in team_emails if e != author_em]
+	if not team_to:
+		team_to = list(team_emails)
 	if not team_to:
 		return
 	is_reopen = comment_type == "Reopen Issue"
@@ -416,6 +523,8 @@ def notify_task_comment(
 	if author_is_internal:
 		customer_to = [e for e in customer_emails if e != author_em]
 		team_to = [e for e in team_emails if e != author_em] if notify_team else []
+		if notify_team and not team_to and team_emails:
+			team_to = list(team_emails)
 		if customer_to:
 			subj_c = _("Update on support task {0}").format(task_name)
 			msg_c = _html_email(

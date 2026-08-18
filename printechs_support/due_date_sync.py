@@ -31,6 +31,11 @@ def sync_support_ticket_due_from_task(task_name: str) -> None:
 
 def propagate_support_ticket_due_to_tasks(ticket_name: str, due_date) -> None:
 	"""When Support Ticket `due_date` is set (e.g. manager on Desk or portal), push to all non-cancelled tasks."""
+	rows = frappe.get_all(
+		"Support Task",
+		filters={"support_ticket": ticket_name, "status": ["!=", "Cancelled"]},
+		fields=["name", "due_date"],
+	)
 	frappe.db.sql(
 		"""
 		UPDATE `tabSupport Task`
@@ -39,3 +44,18 @@ def propagate_support_ticket_due_to_tasks(ticket_name: str, due_date) -> None:
 		""",
 		(due_date, ticket_name),
 	)
+	try:
+		from printechs_support.printechs_support_system.api.support_task_alerts import (
+			notify_support_task_due_date_changed,
+		)
+
+		for row in rows:
+			if (row.due_date or None) == (due_date or None):
+				continue
+			notify_support_task_due_date_changed(
+				row.name,
+				old_due=row.due_date,
+				new_due=due_date,
+			)
+	except Exception:
+		frappe.log_error(frappe.get_traceback(), "Support Task due date email (ticket propagate)")

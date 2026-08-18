@@ -1,0 +1,142 @@
+{
+ "actions": [],
+ "autoname": "naming_series:",
+ "creation": "2026-07-04 00:00:00.000000",
+ "doctype": "DocType",
+ "document_type": "Document",
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "source_project",
+  "status",
+  "column_break_1",
+  "started_at",
+  "completed_at",
+  "latest_knowledge_run",
+  "section_stats",
+  "total_files",
+  "scanned_files",
+  "extracted_path",
+  "scan_log",
+  "section_files",
+  "scan_files"
+ ],
+ "fields": [
+  {
+   "default": "PRAI-SCAN-.YYYY.-.#####",
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Series",
+   "options": "PRAI-SCAN-.YYYY.-.#####",
+   "reqd": 1
+  },
+  {
+   "fieldname": "source_project",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Source Project",
+   "options": "PRAI Source Project",
+   "reqd": 1
+  },
+  {
+   "default": "Queued",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "Queued\nExtracting\nExtracted\nFailed",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "started_at",
+   "fieldtype": "Datetime",
+   "label": "Started At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "completed_at",
+   "fieldtype": "Datetime",
+   "label": "Completed At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "latest_knowledge_run",
+   "fieldtype": "Link",
+   "label": "Latest Knowledge Run",
+   "options": "PRAI Studio Knowledge Run",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_stats",
+   "fieldtype": "Section Break",
+   "label": "Scan Statistics"
+  },
+  {
+   "fieldname": "total_files",
+   "fieldtype": "Int",
+   "label": "Total Extracted Files",
+   "read_only": 1
+  },
+  {
+   "fieldname": "scanned_files",
+   "fieldtype": "Int",
+   "label": "Scannable Files",
+   "read_only": 1
+  },
+  {
+   "fieldname": "extracted_path",
+   "fieldtype": "Small Text",
+   "hidden": 1,
+   "label": "Extracted Path",
+   "read_only": 1
+  },
+  {
+   "fieldname": "scan_log",
+   "fieldtype": "Text",
+   "label": "Scan Log",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_files",
+   "fieldtype": "Section Break",
+   "label": "Scan Results"
+  },
+  {
+   "fieldname": "scan_files",
+   "fieldtype": "Table",
+   "label": "Files",
+   "options": "PRAI Source Scan File",
+   "read_only": 1
+  }
+ ],
+ "links": [],
+ "modified": "2026-07-04 00:00:00.000000",
+ "module": "PRAI Studio",
+ "name": "PRAI Source Scan Run",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "title_field": "source_project",
+ "track_changes": 1
+}

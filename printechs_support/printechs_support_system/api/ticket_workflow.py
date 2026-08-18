@@ -224,6 +224,25 @@ def _save(
 	finally:
 		doc.flags.workflow_transition = False
 
+	if getattr(frappe.flags, "skip_workflow_comment_notification", False):
+		return
+	if not (message or "").strip():
+		return
+	try:
+		from printechs_support.printechs_support_system.api.ticket_comment_emails import (
+			notify_workflow_ticket_message,
+		)
+
+		notify_workflow_ticket_message(
+			doc.name,
+			user=user,
+			message=message or "",
+			reply_type=reply_type,
+			is_internal=is_internal,
+		)
+	except Exception:
+		frappe.log_error(frappe.get_traceback(), "Support Ticket workflow email (_save)")
+
 
 def _assert_terminal_policy(doc, allow_if_admin: bool = False) -> None:
 	st = doc.status or ""
@@ -693,19 +712,6 @@ def customer_reopen_issue(ticket_name: str, message: str, user: str | None = Non
 		prev_st=prev_st,
 		prev_ar=prev_ar,
 	)
-	try:
-		from printechs_support.printechs_support_system.api.ticket_comment_emails import notify_ticket_comment
-
-		notify_ticket_comment(
-			doc.name,
-			comment_type="Reopen Issue",
-			comment_by=uid,
-			content_html=message,
-			is_internal_note=False,
-			author_is_internal=False,
-		)
-	except Exception:
-		frappe.log_error(frappe.get_traceback(), "Support Ticket reopen email")
 	return {"ok": True, "status": doc.status}
 
 

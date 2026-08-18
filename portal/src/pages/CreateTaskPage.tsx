@@ -11,8 +11,7 @@ import {
 	type PortalAssignmentUserRow,
 	type PortalBootstrapResult,
 } from "../api";
-
-/** Browser `datetime-local` → Frappe datetime string */
+import { portalAssignmentUserLabel } from "../lib/assignmentUsers";
 function localDatetimeToFrappe(v: string): string | null {
 	const t = v.trim();
 	if (!t) return null;
@@ -469,7 +468,7 @@ export default function CreateTaskPage() {
 										<option value="">— Unassigned —</option>
 										{assignUsers.map((u) => (
 											<option key={u.name} value={u.name}>
-												{u.full_name || u.name}
+												{portalAssignmentUserLabel(u)}
 											</option>
 										))}
 									</select>
@@ -496,7 +495,7 @@ export default function CreateTaskPage() {
 																onChange={() => toggleCoAssignee(u.name)}
 																disabled={saving}
 															/>
-															<span>{u.full_name || u.name}</span>
+															<span>{portalAssignmentUserLabel(u)}</span>
 														</label>
 													</li>
 												))}
