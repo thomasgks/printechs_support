@@ -31,10 +31,11 @@ def after_install():
 
 
 def sync_printechs_support_workspace():
-	"""Re-import Workspace from app JSON so desk shortcuts/links match source (overrides stale DB)."""
+	"""Re-import Workspace JSON from the app (overrides stale DB on migrate)."""
 	from frappe.modules.utils import reload_doc
 
 	reload_doc("printechs_support_system", "Workspace", "Printechs Support", force=True)
+	reload_doc("prai_studio", "Workspace", "PRAI Studio", force=True)
 
 
 def after_migrate():
